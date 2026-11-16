@@ -1,0 +1,45 @@
+package com.jxxerick.customerapi.web;
+
+import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
+import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
+import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
+import com.jxxerick.customerapi.domain.exception.DomainException;
+import com.jxxerick.customerapi.domain.exception.DomainValidationException;
+import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/** Maps exceptions to RFC 7807 problem details. */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_EXCEPTION = Map.of(
+            CustomerNotFoundException.class, HttpStatus.NOT_FOUND,
+            EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
+            AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,
+            DomainValidationException.class, HttpStatus.BAD_REQUEST,
+            AddressProviderUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE);
+
+    @ExceptionHandler(DomainException.class)
+    ProblemDetail handleDomain(DomainException exception) {
+        HttpStatus status = STATUS_BY_EXCEPTION.getOrDefault(exception.getClass(), HttpStatus.UNPROCESSABLE_ENTITY);
+        return ProblemDetail.forStatusAndDetail(status, exception.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    ProblemDetail handleValidation(MethodArgumentNotValidException exception) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        exception.getBindingResult().getFieldErrors()
+                .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Dados inválidos");
+        problem.setProperty("errors", errors);
+        return problem;
+    }
+}
