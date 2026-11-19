@@ -6,6 +6,7 @@ import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
 import org.springframework.context.annotation.Bean;
@@ -47,6 +48,11 @@ public class UseCaseConfiguration {
                                                               CustomerRepository repository,
                                                               AddressResolver resolver) {
         return new ChangeCustomerAddressUseCase(getCustomer, repository, resolver);
+    }
+
+    @Bean
+    RenameCustomerUseCase renameCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository) {
+        return new RenameCustomerUseCase(getCustomer, repository);
     }
 
     @Bean

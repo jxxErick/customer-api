@@ -2,11 +2,13 @@ package com.jxxerick.customerapi.web;
 
 import com.jxxerick.customerapi.application.command.ChangeAddressCommand;
 import com.jxxerick.customerapi.application.command.CreateCustomerCommand;
+import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
@@ -30,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -55,7 +58,29 @@ class CustomerControllerTest {
     @MockBean
     private ChangeCustomerAddressUseCase changeAddress;
     @MockBean
+    private RenameCustomerUseCase renameCustomer;
+    @MockBean
     private DeleteCustomerUseCase deleteCustomer;
+
+    @Test
+    void renameShouldReturnUpdatedCustomer() throws Exception {
+        Customer customer = Fixtures.customer();
+        customer.rename("Maria Souza");
+        when(renameCustomer.execute(new RenameCustomerCommand(customer.getId(), "Maria Souza"))).thenReturn(customer);
+
+        mockMvc.perform(patch("/api/customers/{id}/name", customer.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Maria Souza\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Maria Souza"));
+    }
+
+    @Test
+    void renameShouldReturn400WhenNameIsBlank() throws Exception {
+        mockMvc.perform(patch("/api/customers/{id}/name", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\" \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.name").value("Nome é obrigatório"));
+    }
 
     @Test
     void createShouldReturn201WithLocation() throws Exception {

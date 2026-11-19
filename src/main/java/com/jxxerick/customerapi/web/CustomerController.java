@@ -5,14 +5,17 @@ import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
+import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -33,17 +36,20 @@ public class CustomerController {
     private final GetCustomerUseCase getCustomer;
     private final ListCustomersUseCase listCustomers;
     private final ChangeCustomerAddressUseCase changeAddress;
+    private final RenameCustomerUseCase renameCustomer;
     private final DeleteCustomerUseCase deleteCustomer;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
                               ListCustomersUseCase listCustomers,
                               ChangeCustomerAddressUseCase changeAddress,
+                              RenameCustomerUseCase renameCustomer,
                               DeleteCustomerUseCase deleteCustomer) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
         this.changeAddress = changeAddress;
+        this.renameCustomer = renameCustomer;
         this.deleteCustomer = deleteCustomer;
     }
 
@@ -70,6 +76,11 @@ public class CustomerController {
     @PutMapping("/{id}/address")
     public CustomerResponse changeAddress(@PathVariable UUID id, @Valid @RequestBody ChangeAddressRequest request) {
         return CustomerResponse.from(changeAddress.execute(request.toCommand(id)));
+    }
+
+    @PatchMapping("/{id}/name")
+    public CustomerResponse rename(@PathVariable UUID id, @Valid @RequestBody RenameCustomerRequest request) {
+        return CustomerResponse.from(renameCustomer.execute(request.toCommand(id)));
     }
 
     @DeleteMapping("/{id}")
