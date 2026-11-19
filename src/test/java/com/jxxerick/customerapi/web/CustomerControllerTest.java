@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.web;
 
 import com.jxxerick.customerapi.application.command.ChangeAddressCommand;
 import com.jxxerick.customerapi.application.command.CreateCustomerCommand;
+import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
@@ -14,6 +15,7 @@ import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableExcep
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -131,11 +133,26 @@ class CustomerControllerTest {
 
     @Test
     void listShouldReturnCustomers() throws Exception {
-        when(listCustomers.execute()).thenReturn(List.of(Fixtures.customer()));
+        when(listCustomers.execute(new ListCustomersQuery(null, 0, 20)))
+                .thenReturn(new PageResult<>(List.of(Fixtures.customer()), 0, 20, 1));
 
         mockMvc.perform(get("/api/customers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("Maria Silva"));
+                .andExpect(jsonPath("$.items[0].name").value("Maria Silva"))
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void listShouldPassNameFilterAndPaging() throws Exception {
+        when(listCustomers.execute(new ListCustomersQuery("maria", 2, 5)))
+                .thenReturn(new PageResult<>(List.of(), 2, 5, 11));
+
+        mockMvc.perform(get("/api/customers").param("name", "maria").param("page", "2").param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.totalPages").value(3));
     }
 
     @Test

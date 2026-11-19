@@ -2,10 +2,13 @@ package com.jxxerick.customerapi.infrastructure.persistence;
 
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
+import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,8 +33,13 @@ class JpaCustomerRepository implements CustomerRepository {
     }
 
     @Override
-    public List<Customer> findAll() {
-        return jpa.findAll().stream().map(CustomerEntityMapper::toDomain).toList();
+    public PageResult<Customer> search(String nameFragment, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("name", "id"));
+        Page<CustomerEntity> result = nameFragment == null
+                ? jpa.findAll(pageable)
+                : jpa.findByNameContainingIgnoreCase(nameFragment, pageable);
+        return new PageResult<>(result.map(CustomerEntityMapper::toDomain).getContent(), page, size,
+                result.getTotalElements());
     }
 
     @Override

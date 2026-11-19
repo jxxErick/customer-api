@@ -1,7 +1,9 @@
 package com.jxxerick.customerapi.application.usecase;
 
+import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
 import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
@@ -44,11 +46,21 @@ class CustomerQueriesUseCaseTest {
     }
 
     @Test
-    void listShouldReturnAllCustomers() {
-        List<Customer> customers = List.of(Fixtures.customer());
-        when(customerRepository.findAll()).thenReturn(customers);
+    void listShouldSearchWithNormalizedQuery() {
+        PageResult<Customer> page = new PageResult<>(List.of(Fixtures.customer()), 0, 100, 1);
+        when(customerRepository.search("maria", 0, 100)).thenReturn(page);
 
-        assertThat(new ListCustomersUseCase(customerRepository).execute()).isEqualTo(customers);
+        assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery("  maria ", -3, 500)))
+                .isEqualTo(page);
+    }
+
+    @Test
+    void listShouldTreatBlankNameAsNoFilter() {
+        PageResult<Customer> empty = new PageResult<>(List.of(), 0, 1, 0);
+        when(customerRepository.search(null, 0, 1)).thenReturn(empty);
+
+        assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery(" ", 0, 0)))
+                .isEqualTo(empty);
     }
 
     @Test

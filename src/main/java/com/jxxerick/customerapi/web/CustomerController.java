@@ -1,5 +1,6 @@
 package com.jxxerick.customerapi.web;
 
+import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
@@ -10,6 +11,7 @@ import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
+import com.jxxerick.customerapi.web.dto.PageResponse;
 import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -21,11 +23,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -64,8 +66,11 @@ public class CustomerController {
     }
 
     @GetMapping
-    public List<CustomerResponse> list() {
-        return listCustomers.execute().stream().map(CustomerResponse::from).toList();
+    public PageResponse<CustomerResponse> list(@RequestParam(required = false) String name,
+                                               @RequestParam(defaultValue = "0") int page,
+                                               @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.from(listCustomers.execute(new ListCustomersQuery(name, page, size))
+                .map(CustomerResponse::from));
     }
 
     @GetMapping("/{id}")
