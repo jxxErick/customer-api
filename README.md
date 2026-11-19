@@ -51,10 +51,16 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | `POST` | `/api/customers` | Cria cliente (endereço resolvido pelo CEP) |
-| `GET` | `/api/customers` | Lista clientes |
+| `GET` | `/api/customers?name=&page=0&size=20` | Lista clientes paginada, com filtro por nome |
 | `GET` | `/api/customers/{id}` | Busca cliente |
 | `PUT` | `/api/customers/{id}/address` | Troca o endereço |
+| `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente |
 | `DELETE` | `/api/customers/{id}` | Remove cliente |
+
+A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
+em 0 e `size` vai de 1 a 100. A resposta traz `items`, `page`, `size`, `totalItems` e `totalPages`.
+A paginação fica atrás da porta `CustomerRepository` (`PageResult` do domínio), então o caso de uso
+não conhece o `Pageable` do Spring.
 
 Erros seguem o padrão **RFC 7807** (`application/problem+json`):
 `400` validação · `404` cliente inexistente · `409` e-mail duplicado · `422` CEP não encontrado · `503` ViaCEP fora do ar.
