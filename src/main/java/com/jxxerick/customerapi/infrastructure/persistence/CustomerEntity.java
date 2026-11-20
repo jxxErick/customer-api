@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -42,12 +43,16 @@ public class CustomerEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Version
+    private Long version;
+
     protected CustomerEntity() {
     }
 
     @SuppressWarnings("java:S107")
     CustomerEntity(UUID id, String name, String email, String zipCode, String street, String number,
-                   String complement, String neighborhood, String city, String state, Instant createdAt) {
+                   String complement, String neighborhood, String city, String state, Instant createdAt,
+                   Long version) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -59,6 +64,7 @@ public class CustomerEntity {
         this.city = city;
         this.state = state;
         this.createdAt = createdAt;
+        this.version = version;
     }
 
     UUID getId() {
@@ -103,5 +109,9 @@ public class CustomerEntity {
 
     Instant getCreatedAt() {
         return createdAt;
+    }
+
+    Long getVersion() {
+        return version;
     }
 }

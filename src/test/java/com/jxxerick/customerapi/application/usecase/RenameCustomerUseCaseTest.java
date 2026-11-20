@@ -1,6 +1,7 @@
 package com.jxxerick.customerapi.application.usecase;
 
 import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
+import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
@@ -40,7 +41,7 @@ class RenameCustomerUseCaseTest {
         when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
         when(customerRepository.save(customer)).thenReturn(customer);
 
-        Customer updated = useCase.execute(new RenameCustomerCommand(customer.getId(), "  Maria Souza  "));
+        Customer updated = useCase.execute(new RenameCustomerCommand(customer.getId(), "  Maria Souza  ", null));
 
         assertThat(updated.getName()).isEqualTo("Maria Souza");
     }
@@ -50,8 +51,30 @@ class RenameCustomerUseCaseTest {
         UUID id = UUID.randomUUID();
         when(customerRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.execute(new RenameCustomerCommand(id, "Maria")))
+        assertThatThrownBy(() -> useCase.execute(new RenameCustomerCommand(id, "Maria", null)))
                 .isInstanceOf(CustomerNotFoundException.class);
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRenameWhenVersionMatches() {
+        Customer customer = Fixtures.storedCustomer(2);
+        when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
+        when(customerRepository.save(customer)).thenReturn(customer);
+
+        Customer updated = useCase.execute(new RenameCustomerCommand(customer.getId(), "Maria Souza", 2L));
+
+        assertThat(updated.getName()).isEqualTo("Maria Souza");
+    }
+
+    @Test
+    void shouldRejectOutdatedVersion() {
+        Customer customer = Fixtures.storedCustomer(2);
+        when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
+
+        assertThatThrownBy(() -> useCase.execute(new RenameCustomerCommand(customer.getId(), "Maria Souza", 1L)))
+                .isInstanceOf(ConcurrentUpdateException.class);
+        assertThat(customer.getName()).isEqualTo("Maria Silva");
         verify(customerRepository, never()).save(any());
     }
 }

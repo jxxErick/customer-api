@@ -1,5 +1,6 @@
 package com.jxxerick.customerapi.infrastructure.persistence;
 
+import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.PageResult;
@@ -7,9 +8,11 @@ import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 @Import(JpaCustomerRepository.class)
@@ -18,6 +21,9 @@ class JpaCustomerRepositoryTest {
     @Autowired
     private JpaCustomerRepository repository;
 
+    @Autowired
+    private TestEntityManager entityManager;
+
     @Test
     void shouldSaveAndFindCustomer() {
         Customer customer = repository.save(Fixtures.customer());
@@ -25,6 +31,33 @@ class JpaCustomerRepositoryTest {
         assertThat(repository.findById(customer.getId())).get()
                 .usingRecursiveComparison().isEqualTo(customer);
         assertThat(repository.search(null, 0, 10).items()).hasSize(1);
+    }
+
+    @Test
+    void shouldBumpVersionOnEveryUpdate() {
+        Customer customer = repository.save(Fixtures.customer());
+        entityManager.flush();
+        assertThat(customer.getVersion()).isZero();
+
+        customer.rename("Maria Souza");
+        repository.save(customer);
+        entityManager.flush();
+
+        assertThat(repository.findById(customer.getId())).get().extracting(Customer::getVersion).isEqualTo(1L);
+    }
+
+    @Test
+    void shouldRejectSavingAnOutdatedCopy() {
+        Customer original = repository.save(Fixtures.customer());
+        entityManager.flush();
+        Customer stale = repository.findById(original.getId()).orElseThrow();
+
+        original.rename("Maria Souza");
+        repository.save(original);
+        entityManager.flush();
+        stale.rename("Maria Oliveira");
+
+        assertThatThrownBy(() -> repository.save(stale)).isInstanceOf(ConcurrentUpdateException.class);
     }
 
     @Test

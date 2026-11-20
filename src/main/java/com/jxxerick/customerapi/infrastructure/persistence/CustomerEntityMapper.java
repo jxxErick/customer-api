@@ -25,7 +25,8 @@ final class CustomerEntityMapper {
                 postal.neighborhood(),
                 postal.city(),
                 postal.state(),
-                customer.getCreatedAt());
+                customer.getCreatedAt(),
+                customer.getVersion());
     }
 
     static Customer toDomain(CustomerEntity entity) {
@@ -37,6 +38,7 @@ final class CustomerEntityMapper {
                 entity.getState());
         Address address = new Address(postal, entity.getNumber(), entity.getComplement());
         return Customer.restore(
-                entity.getId(), entity.getName(), new Email(entity.getEmail()), address, entity.getCreatedAt());
+                entity.getId(), entity.getName(), new Email(entity.getEmail()), address, entity.getCreatedAt(),
+                entity.getVersion());
     }
 }

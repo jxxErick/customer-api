@@ -12,6 +12,7 @@ import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
+import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.model.Customer;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,6 +33,7 @@ import static org.hamcrest.Matchers.endsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -68,7 +71,8 @@ class CustomerControllerTest {
     void renameShouldReturnUpdatedCustomer() throws Exception {
         Customer customer = Fixtures.customer();
         customer.rename("Maria Souza");
-        when(renameCustomer.execute(new RenameCustomerCommand(customer.getId(), "Maria Souza"))).thenReturn(customer);
+        when(renameCustomer.execute(new RenameCustomerCommand(customer.getId(), "Maria Souza", null)))
+                .thenReturn(customer);
 
         mockMvc.perform(patch("/api/customers/{id}/name", customer.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Maria Souza\"}"))
@@ -168,7 +172,7 @@ class CustomerControllerTest {
     @Test
     void changeAddressShouldReturnUpdatedCustomer() throws Exception {
         Customer customer = Fixtures.customer();
-        when(changeAddress.execute(new ChangeAddressCommand(customer.getId(), "01001000", "7", null)))
+        when(changeAddress.execute(new ChangeAddressCommand(customer.getId(), "01001000", "7", null, null)))
                 .thenReturn(customer);
 
         mockMvc.perform(put("/api/customers/{id}/address", customer.getId())
@@ -176,6 +180,52 @@ class CustomerControllerTest {
                         .content("{\"zipCode\":\"01001000\",\"number\":\"7\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(customer.getId().toString()));
+    }
+
+    @Test
+    void getShouldReturnVersionAsETag() throws Exception {
+        Customer customer = Fixtures.storedCustomer(4);
+        when(getCustomer.execute(customer.getId())).thenReturn(customer);
+
+        mockMvc.perform(get("/api/customers/{id}", customer.getId()))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ETAG, "\"4\""));
+    }
+
+    @Test
+    void renameShouldForwardIfMatchVersion() throws Exception {
+        Customer customer = Fixtures.storedCustomer(5);
+        when(renameCustomer.execute(new RenameCustomerCommand(customer.getId(), "Maria Souza", 4L)))
+                .thenReturn(customer);
+
+        mockMvc.perform(patch("/api/customers/{id}/name", customer.getId())
+                        .header(HttpHeaders.IF_MATCH, "W/\"4\"")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Maria Souza\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ETAG, "\"5\""));
+    }
+
+    @Test
+    void changeAddressShouldReturn412WhenVersionIsOutdated() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(changeAddress.execute(new ChangeAddressCommand(id, "01001000", "7", null, 1L)))
+                .thenThrow(new ConcurrentUpdateException(id));
+
+        mockMvc.perform(put("/api/customers/{id}/address", id)
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"zipCode\":\"01001000\",\"number\":\"7\"}"))
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.status").value(412));
+    }
+
+    @Test
+    void renameShouldReturn400WhenIfMatchIsMalformed() throws Exception {
+        mockMvc.perform(patch("/api/customers/{id}/name", UUID.randomUUID())
+                        .header(HttpHeaders.IF_MATCH, "abc")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Maria\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(renameCustomer);
     }
 
     @Test

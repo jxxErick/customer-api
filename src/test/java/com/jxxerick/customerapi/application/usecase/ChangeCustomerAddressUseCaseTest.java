@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.application.usecase;
 
 import com.jxxerick.customerapi.application.command.ChangeAddressCommand;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
+import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.PostalAddress;
 import com.jxxerick.customerapi.domain.model.ZipCode;
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,7 +51,7 @@ class ChangeCustomerAddressUseCaseTest {
         when(addressProvider.findByZipCode(newZip)).thenReturn(Optional.of(rio));
         when(customerRepository.save(customer)).thenReturn(customer);
 
-        Customer updated = useCase.execute(new ChangeAddressCommand(customer.getId(), "20040020", "5", null));
+        Customer updated = useCase.execute(new ChangeAddressCommand(customer.getId(), "20040020", "5", null, null));
 
         assertThat(updated.getAddress().postal()).isEqualTo(rio);
         assertThat(updated.getAddress().number()).isEqualTo("5");
@@ -61,9 +63,23 @@ class ChangeCustomerAddressUseCaseTest {
         when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
         when(addressProvider.findByZipCode(any())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.execute(new ChangeAddressCommand(customer.getId(), "99999999", "5", null)))
+        ChangeAddressCommand command = new ChangeAddressCommand(customer.getId(), "99999999", "5", null, null);
+
+        assertThatThrownBy(() -> useCase.execute(command))
                 .isInstanceOf(AddressNotFoundException.class);
         assertThat(customer.getAddress()).isEqualTo(Fixtures.address());
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectOutdatedVersionBeforeCallingTheProvider() {
+        Customer customer = Fixtures.storedCustomer(3);
+        when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
+        ChangeAddressCommand command = new ChangeAddressCommand(customer.getId(), "20040020", "5", null, 2L);
+
+        assertThatThrownBy(() -> useCase.execute(command))
+                .isInstanceOf(ConcurrentUpdateException.class);
+        verifyNoInteractions(addressProvider);
         verify(customerRepository, never()).save(any());
     }
 }

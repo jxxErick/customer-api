@@ -20,6 +20,7 @@ public class ChangeCustomerAddressUseCase {
 
     public Customer execute(ChangeAddressCommand command) {
         Customer customer = getCustomer.execute(command.customerId());
+        customer.ensureVersion(command.expectedVersion());
         customer.moveTo(addressResolver.resolve(command.zipCode(), command.number(), command.complement()));
         return customerRepository.save(customer);
     }

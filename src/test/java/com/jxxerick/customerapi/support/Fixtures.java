@@ -7,6 +7,7 @@ import com.jxxerick.customerapi.domain.model.PostalAddress;
 import com.jxxerick.customerapi.domain.model.ZipCode;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public final class Fixtures {
 
@@ -25,5 +26,11 @@ public final class Fixtures {
 
     public static Customer customer() {
         return Customer.create("Maria Silva", new Email("maria@example.com"), address(), NOW);
+    }
+
+    /** Customer as if loaded from storage at the given version. */
+    public static Customer storedCustomer(long version) {
+        return Customer.restore(UUID.randomUUID(), "Maria Silva", new Email("maria@example.com"), address(), NOW,
+                version);
     }
 }

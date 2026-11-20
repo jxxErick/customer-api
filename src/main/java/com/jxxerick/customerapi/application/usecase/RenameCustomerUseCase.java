@@ -16,6 +16,7 @@ public class RenameCustomerUseCase {
 
     public Customer execute(RenameCustomerCommand command) {
         Customer customer = getCustomer.execute(command.customerId());
+        customer.ensureVersion(command.expectedVersion());
         customer.rename(command.name().strip());
         return customerRepository.save(customer);
     }

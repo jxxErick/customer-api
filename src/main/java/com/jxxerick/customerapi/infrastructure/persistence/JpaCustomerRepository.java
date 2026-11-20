@@ -1,9 +1,11 @@
 package com.jxxerick.customerapi.infrastructure.persistence;
 
+import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,7 +26,11 @@ class JpaCustomerRepository implements CustomerRepository {
 
     @Override
     public Customer save(Customer customer) {
-        return CustomerEntityMapper.toDomain(jpa.save(CustomerEntityMapper.toEntity(customer)));
+        try {
+            return CustomerEntityMapper.toDomain(jpa.save(CustomerEntityMapper.toEntity(customer)));
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConcurrentUpdateException(customer.getId());
+        }
     }
 
     @Override

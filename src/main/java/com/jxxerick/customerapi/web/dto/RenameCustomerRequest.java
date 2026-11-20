@@ -12,7 +12,7 @@ public record RenameCustomerRequest(
         String name
 ) {
 
-    public RenameCustomerCommand toCommand(UUID customerId) {
-        return new RenameCustomerCommand(customerId, name);
+    public RenameCustomerCommand toCommand(UUID customerId, Long expectedVersion) {
+        return new RenameCustomerCommand(customerId, name, expectedVersion);
     }
 }

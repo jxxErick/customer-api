@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.web;
 
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
+import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.DomainException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
@@ -21,6 +22,7 @@ public class GlobalExceptionHandler {
 
     private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_EXCEPTION = Map.of(
             CustomerNotFoundException.class, HttpStatus.NOT_FOUND,
+            ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED,
             EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
             AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             DomainValidationException.class, HttpStatus.BAD_REQUEST,
@@ -30,6 +32,11 @@ public class GlobalExceptionHandler {
     ProblemDetail handleDomain(DomainException exception) {
         HttpStatus status = STATUS_BY_EXCEPTION.getOrDefault(exception.getClass(), HttpStatus.UNPROCESSABLE_ENTITY);
         return ProblemDetail.forStatusAndDetail(status, exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidIfMatchException.class)
+    ProblemDetail handleInvalidIfMatch(InvalidIfMatchException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
