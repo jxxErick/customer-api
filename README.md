@@ -37,6 +37,7 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | Value Object | `Email`, `ZipCode`, `Address` (imutáveis e autovalidados) |
 | Command | `CreateCustomerCommand`, `ChangeAddressCommand` |
 | Mapper | `CustomerEntityMapper`, `CustomerResponse.from(...)` |
+| Optimistic Locking | `Customer.ensureVersion(...)` + `@Version` no `CustomerEntity` |
 
 ### SOLID na prática
 
@@ -52,9 +53,10 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | --- | --- | --- |
 | `POST` | `/api/customers` | Cria cliente (endereço resolvido pelo CEP) |
 | `GET` | `/api/customers?name=&page=0&size=20` | Lista clientes paginada, com filtro por nome |
-| `GET` | `/api/customers/{id}` | Busca cliente |
-| `PUT` | `/api/customers/{id}/address` | Troca o endereço |
-| `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente |
+| `GET` | `/api/customers/stats` | Clientes por estado e cidade |
+| `GET` | `/api/customers/{id}` | Busca cliente (devolve `ETag`) |
+| `PUT` | `/api/customers/{id}/address` | Troca o endereço (aceita `If-Match`) |
+| `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente (aceita `If-Match`) |
 | `DELETE` | `/api/customers/{id}` | Remove cliente |
 
 A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
@@ -63,7 +65,41 @@ A paginação fica atrás da porta `CustomerRepository` (`PageResult` do domíni
 não conhece o `Pageable` do Spring.
 
 Erros seguem o padrão **RFC 7807** (`application/problem+json`):
-`400` validação · `404` cliente inexistente · `409` e-mail duplicado · `422` CEP não encontrado · `503` ViaCEP fora do ar.
+`400` validação ou `If-Match` malformado · `404` cliente inexistente · `409` e-mail duplicado ·
+`412` versão desatualizada · `422` CEP não encontrado · `503` ViaCEP fora do ar.
+
+### Concorrência otimista (ETag / If-Match)
+
+Cada cliente tem uma versão, que a API devolve no cabeçalho `ETag` (`"0"`, `"1"`...) no `POST`,
+no `GET /{id}` e nas alterações. Quem quiser editar sem sobrescrever a mudança de outra pessoa manda
+essa versão no `If-Match`:
+
+```bash
+curl -i -X PATCH http://localhost:8080/api/customers/6f1c.../name \
+  -H "Content-Type: application/json" -H 'If-Match: "0"' -d '{"name":"Maria Souza"}'
+```
+
+Se alguém alterou o cliente nesse meio-tempo, a resposta é `412 Precondition Failed`. A checagem
+acontece em duas camadas: o caso de uso compara o `If-Match` com a versão carregada (antes de
+consultar o ViaCEP) e o `@Version` do JPA barra a corrida entre a leitura e a gravação, que o
+adapter traduz para a mesma exceção de domínio. Sem `If-Match` (ou com `*`), a alteração passa
+direto, como antes.
+
+### Estatísticas
+
+`GET /api/customers/stats` agrupa os clientes por estado e cidade com uma única consulta
+`GROUP BY` (projeção do Spring Data); a montagem, a ordenação (maior primeiro) e as porcentagens
+ficam em `CustomerStats`, no domínio.
+
+```json
+{
+  "totalCustomers": 9,
+  "states": [
+    { "state": "SP", "customers": 5, "percentage": 55.6,
+      "cities": [ { "city": "São Paulo", "customers": 4 }, { "city": "Campinas", "customers": 1 } ] }
+  ]
+}
+```
 
 ### Exemplo
 
