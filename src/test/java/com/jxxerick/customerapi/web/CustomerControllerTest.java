@@ -7,6 +7,7 @@ import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
@@ -16,6 +17,8 @@ import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.CustomerStats;
+import com.jxxerick.customerapi.domain.model.LocationCount;
 import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
@@ -66,6 +69,8 @@ class CustomerControllerTest {
     private RenameCustomerUseCase renameCustomer;
     @MockBean
     private DeleteCustomerUseCase deleteCustomer;
+    @MockBean
+    private GetCustomerStatsUseCase customerStats;
 
     @Test
     void renameShouldReturnUpdatedCustomer() throws Exception {
@@ -226,6 +231,19 @@ class CustomerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Maria\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(renameCustomer);
+    }
+
+    @Test
+    void statsShouldReturnCustomersPerState() throws Exception {
+        when(customerStats.execute()).thenReturn(CustomerStats.from(List.of(
+                new LocationCount("SP", "São Paulo", 3), new LocationCount("RJ", "Niterói", 1))));
+
+        mockMvc.perform(get("/api/customers/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCustomers").value(4))
+                .andExpect(jsonPath("$.states[0].state").value("SP"))
+                .andExpect(jsonPath("$.states[0].percentage").value(75.0))
+                .andExpect(jsonPath("$.states[1].cities[0].city").value("Niterói"));
     }
 
     @Test

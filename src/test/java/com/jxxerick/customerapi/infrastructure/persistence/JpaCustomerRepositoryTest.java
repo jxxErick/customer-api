@@ -1,9 +1,13 @@
 package com.jxxerick.customerapi.infrastructure.persistence;
 
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
+import com.jxxerick.customerapi.domain.model.Address;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
+import com.jxxerick.customerapi.domain.model.LocationCount;
 import com.jxxerick.customerapi.domain.model.PageResult;
+import com.jxxerick.customerapi.domain.model.PostalAddress;
+import com.jxxerick.customerapi.domain.model.ZipCode;
 import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +82,19 @@ class JpaCustomerRepositoryTest {
 
     private static Customer customer(String name, String email) {
         return Customer.create(name, new Email(email), Fixtures.address(), Fixtures.NOW);
+    }
+
+    @Test
+    void shouldCountCustomersPerCity() {
+        repository.save(customer("Maria Silva", "maria@example.com"));
+        repository.save(customer("Ana Souza", "ana@example.com"));
+        repository.save(Customer.create("João Pereira", new Email("joao@example.com"),
+                new Address(new PostalAddress(new ZipCode("20040-020"), "Rua da Assembleia", "Centro",
+                        "Rio de Janeiro", "RJ"), "5", null), Fixtures.NOW));
+
+        assertThat(repository.countByLocation()).containsExactlyInAnyOrder(
+                new LocationCount("SP", "São Paulo", 2),
+                new LocationCount("RJ", "Rio de Janeiro", 1));
     }
 
     @Test

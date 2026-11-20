@@ -4,6 +4,7 @@ import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
@@ -11,6 +12,7 @@ import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
+import com.jxxerick.customerapi.web.dto.CustomerStatsResponse;
 import com.jxxerick.customerapi.web.dto.PageResponse;
 import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
 import jakarta.validation.Valid;
@@ -42,19 +44,22 @@ public class CustomerController {
     private final ChangeCustomerAddressUseCase changeAddress;
     private final RenameCustomerUseCase renameCustomer;
     private final DeleteCustomerUseCase deleteCustomer;
+    private final GetCustomerStatsUseCase customerStats;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
                               ListCustomersUseCase listCustomers,
                               ChangeCustomerAddressUseCase changeAddress,
                               RenameCustomerUseCase renameCustomer,
-                              DeleteCustomerUseCase deleteCustomer) {
+                              DeleteCustomerUseCase deleteCustomer,
+                              GetCustomerStatsUseCase customerStats) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
         this.changeAddress = changeAddress;
         this.renameCustomer = renameCustomer;
         this.deleteCustomer = deleteCustomer;
+        this.customerStats = customerStats;
     }
 
     @PostMapping
@@ -73,6 +78,11 @@ public class CustomerController {
                                                @RequestParam(defaultValue = "20") int size) {
         return PageResponse.from(listCustomers.execute(new ListCustomersQuery(name, page, size))
                 .map(CustomerResponse::from));
+    }
+
+    @GetMapping("/stats")
+    public CustomerStatsResponse stats() {
+        return CustomerStatsResponse.from(customerStats.execute());
     }
 
     @GetMapping("/{id}")

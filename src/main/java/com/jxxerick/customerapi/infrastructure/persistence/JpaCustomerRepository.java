@@ -3,6 +3,7 @@ package com.jxxerick.customerapi.infrastructure.persistence;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
+import com.jxxerick.customerapi.domain.model.LocationCount;
 import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -46,6 +48,13 @@ class JpaCustomerRepository implements CustomerRepository {
                 : jpa.findByNameContainingIgnoreCase(nameFragment, pageable);
         return new PageResult<>(result.map(CustomerEntityMapper::toDomain).getContent(), page, size,
                 result.getTotalElements());
+    }
+
+    @Override
+    public List<LocationCount> countByLocation() {
+        return jpa.countByLocation().stream()
+                .map(row -> new LocationCount(row.getState(), row.getCity(), row.getCustomers()))
+                .toList();
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.jxxerick.customerapi.application.usecase.AddressResolver;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
@@ -41,6 +42,11 @@ public class UseCaseConfiguration {
     @Bean
     ListCustomersUseCase listCustomersUseCase(CustomerRepository repository) {
         return new ListCustomersUseCase(repository);
+    }
+
+    @Bean
+    GetCustomerStatsUseCase getCustomerStatsUseCase(CustomerRepository repository) {
+        return new GetCustomerStatsUseCase(repository);
     }
 
     @Bean
