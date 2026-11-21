@@ -1,5 +1,6 @@
 package com.jxxerick.customerapi.web;
 
+import com.jxxerick.customerapi.application.command.ImportRow;
 import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
@@ -8,18 +9,22 @@ import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.web.csv.CustomerCsvReader;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
 import com.jxxerick.customerapi.web.dto.CpfLookupRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
 import com.jxxerick.customerapi.web.dto.CustomerStatsResponse;
+import com.jxxerick.customerapi.web.dto.ImportReportResponse;
 import com.jxxerick.customerapi.web.dto.PageResponse;
 import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,9 +37,13 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -43,6 +52,7 @@ public class CustomerController {
 
     static final String IDEMPOTENCY_KEY = "Idempotency-Key";
     static final String IDEMPOTENT_REPLAYED = "Idempotent-Replayed";
+    static final String TEXT_CSV = "text/csv";
 
     private final CreateCustomerUseCase createCustomer;
     private final GetCustomerUseCase getCustomer;
@@ -53,6 +63,7 @@ public class CustomerController {
     private final GetCustomerStatsUseCase customerStats;
     private final FindCustomerByCpfUseCase findByCpf;
     private final IdempotentCreateCustomerUseCase idempotentCreate;
+    private final ImportCustomersUseCase importCustomers;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
@@ -62,7 +73,8 @@ public class CustomerController {
                               DeleteCustomerUseCase deleteCustomer,
                               GetCustomerStatsUseCase customerStats,
                               FindCustomerByCpfUseCase findByCpf,
-                              IdempotentCreateCustomerUseCase idempotentCreate) {
+                              IdempotentCreateCustomerUseCase idempotentCreate,
+                              ImportCustomersUseCase importCustomers) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
@@ -72,6 +84,7 @@ public class CustomerController {
         this.customerStats = customerStats;
         this.findByCpf = findByCpf;
         this.idempotentCreate = idempotentCreate;
+        this.importCustomers = importCustomers;
     }
 
     /** With an Idempotency-Key, a retry returns the customer created the first time. */
@@ -98,6 +111,23 @@ public class CustomerController {
             builder.header(IDEMPOTENT_REPLAYED, "true");
         }
         return withETag(builder, customer);
+    }
+
+    /** Raw CSV body, always read as UTF-8. */
+    @PostMapping(path = "/import", consumes = TEXT_CSV)
+    public ImportReportResponse importCsv(@RequestBody byte[] content) {
+        return importFrom(content);
+    }
+
+    /** Same import from a form upload (field "file"). */
+    @PostMapping(path = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ImportReportResponse importFile(@RequestParam("file") MultipartFile file) throws IOException {
+        return importFrom(file.getBytes());
+    }
+
+    private ImportReportResponse importFrom(byte[] content) {
+        List<ImportRow> rows = CustomerCsvReader.read(new String(content, StandardCharsets.UTF_8));
+        return ImportReportResponse.from(importCustomers.execute(rows));
     }
 
     @GetMapping

@@ -7,6 +7,7 @@ import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
@@ -43,6 +44,11 @@ public class UseCaseConfiguration {
     @Bean
     FindCustomerByCpfUseCase findCustomerByCpfUseCase(CustomerRepository repository) {
         return new FindCustomerByCpfUseCase(repository);
+    }
+
+    @Bean
+    ImportCustomersUseCase importCustomersUseCase(CreateCustomerUseCase createCustomer) {
+        return new ImportCustomersUseCase(createCustomer);
     }
 
     @Bean

@@ -9,6 +9,8 @@ import com.jxxerick.customerapi.domain.exception.DomainException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
+import com.jxxerick.customerapi.domain.exception.ImportTooLargeException;
+import com.jxxerick.customerapi.web.csv.InvalidCsvException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -28,6 +30,7 @@ public class GlobalExceptionHandler {
             EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
             CpfAlreadyInUseException.class, HttpStatus.CONFLICT,
             IdempotencyKeyReusedException.class, HttpStatus.UNPROCESSABLE_ENTITY,
+            ImportTooLargeException.class, HttpStatus.PAYLOAD_TOO_LARGE,
             AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             DomainValidationException.class, HttpStatus.BAD_REQUEST,
             AddressProviderUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE);
@@ -40,6 +43,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidIfMatchException.class)
     ProblemDetail handleInvalidIfMatch(InvalidIfMatchException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCsvException.class)
+    ProblemDetail handleInvalidCsv(InvalidCsvException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 

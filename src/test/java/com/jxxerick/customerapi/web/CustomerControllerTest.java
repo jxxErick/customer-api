@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.web;
 
 import com.jxxerick.customerapi.application.command.ChangeAddressCommand;
 import com.jxxerick.customerapi.application.command.CreateCustomerCommand;
+import com.jxxerick.customerapi.application.command.ImportRow;
 import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
@@ -11,6 +12,7 @@ import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
@@ -21,6 +23,7 @@ import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
+import com.jxxerick.customerapi.domain.exception.ImportTooLargeException;
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
@@ -34,8 +37,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,6 +53,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -83,6 +89,8 @@ class CustomerControllerTest {
     private FindCustomerByCpfUseCase findByCpf;
     @MockBean
     private IdempotentCreateCustomerUseCase idempotentCreate;
+    @MockBean
+    private ImportCustomersUseCase importCustomers;
 
     @Test
     void renameShouldReturnUpdatedCustomer() throws Exception {
@@ -356,6 +364,52 @@ class CustomerControllerTest {
         mockMvc.perform(post("/api/customers").header("Idempotency-Key", "x")
                         .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void importShouldReadUtf8CsvBodyAndReturnReport() throws Exception {
+        UUID id = UUID.randomUUID();
+        List<ImportRow> expected = List.of(new ImportRow(2, new CreateCustomerCommand(
+                "João Pereira", "joao@example.com", "20040020", "5", null, null)));
+        when(importCustomers.execute(expected)).thenReturn(new ImportCustomersUseCase.Report(1, 1, 0,
+                List.of(new ImportCustomersUseCase.RowResult(2, ImportCustomersUseCase.RowStatus.CREATED,
+                        "joao@example.com", id, null))));
+
+        mockMvc.perform(post("/api/customers/import").contentType("text/csv")
+                        .content("nome;email;cep;numero\nJoão Pereira;joao@example.com;20040020;5\n"
+                                .getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(1))
+                .andExpect(jsonPath("$.rows[0].status").value("CREATED"))
+                .andExpect(jsonPath("$.rows[0].customerId").value(id.toString()));
+    }
+
+    @Test
+    void importShouldAcceptMultipartUpload() throws Exception {
+        when(importCustomers.execute(any())).thenReturn(new ImportCustomersUseCase.Report(0, 0, 0, List.of()));
+        MockMultipartFile file = new MockMultipartFile("file", "clientes.csv", "text/csv",
+                "name,email,zipCode,number\n".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/customers/import").file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(0));
+    }
+
+    @Test
+    void importShouldReturn400ForUnreadableCsv() throws Exception {
+        mockMvc.perform(post("/api/customers/import").contentType("text/csv").content("name,cpf\nAna,1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Cabeçalho sem as colunas obrigatórias: email, zipCode, number"));
+        verifyNoInteractions(importCustomers);
+    }
+
+    @Test
+    void importShouldReturn413WhenFileIsTooBig() throws Exception {
+        when(importCustomers.execute(any())).thenThrow(new ImportTooLargeException(1001, 1000));
+
+        mockMvc.perform(post("/api/customers/import").contentType("text/csv")
+                        .content("name,email,zipCode,number\n"))
+                .andExpect(status().isPayloadTooLarge());
     }
 
     @Test
