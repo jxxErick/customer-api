@@ -7,6 +7,7 @@ import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
@@ -40,6 +41,9 @@ import java.util.UUID;
 @RequestMapping("/api/customers")
 public class CustomerController {
 
+    static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    static final String IDEMPOTENT_REPLAYED = "Idempotent-Replayed";
+
     private final CreateCustomerUseCase createCustomer;
     private final GetCustomerUseCase getCustomer;
     private final ListCustomersUseCase listCustomers;
@@ -48,6 +52,7 @@ public class CustomerController {
     private final DeleteCustomerUseCase deleteCustomer;
     private final GetCustomerStatsUseCase customerStats;
     private final FindCustomerByCpfUseCase findByCpf;
+    private final IdempotentCreateCustomerUseCase idempotentCreate;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
@@ -56,7 +61,8 @@ public class CustomerController {
                               RenameCustomerUseCase renameCustomer,
                               DeleteCustomerUseCase deleteCustomer,
                               GetCustomerStatsUseCase customerStats,
-                              FindCustomerByCpfUseCase findByCpf) {
+                              FindCustomerByCpfUseCase findByCpf,
+                              IdempotentCreateCustomerUseCase idempotentCreate) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
@@ -65,16 +71,33 @@ public class CustomerController {
         this.deleteCustomer = deleteCustomer;
         this.customerStats = customerStats;
         this.findByCpf = findByCpf;
+        this.idempotentCreate = idempotentCreate;
     }
 
+    /** With an Idempotency-Key, a retry returns the customer created the first time. */
     @PostMapping
-    public ResponseEntity<CustomerResponse> create(@Valid @RequestBody CreateCustomerRequest request) {
-        Customer customer = createCustomer.execute(request.toCommand());
+    public ResponseEntity<CustomerResponse> create(
+            @RequestHeader(value = IDEMPOTENCY_KEY, required = false) String idempotencyKey,
+            @Valid @RequestBody CreateCustomerRequest request) {
+        Customer customer;
+        boolean replayed = false;
+        if (idempotencyKey == null) {
+            customer = createCustomer.execute(request.toCommand());
+        } else {
+            IdempotentCreateCustomerUseCase.Result result =
+                    idempotentCreate.execute(idempotencyKey, request.toCommand());
+            customer = result.customer();
+            replayed = result.replayed();
+        }
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(customer.getId())
                 .toUri();
-        return withETag(ResponseEntity.created(location), customer);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.created(location);
+        if (replayed) {
+            builder.header(IDEMPOTENT_REPLAYED, "true");
+        }
+        return withETag(builder, customer);
     }
 
     @GetMapping

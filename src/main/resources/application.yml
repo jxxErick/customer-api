@@ -19,3 +19,7 @@ integration:
     connect-timeout: 3s
     read-timeout: 5s
     cache-ttl: 1h
+
+idempotency:
+  ttl: 24h
+  cleanup-interval: PT1H

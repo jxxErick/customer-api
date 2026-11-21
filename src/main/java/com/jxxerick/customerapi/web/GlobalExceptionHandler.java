@@ -8,6 +8,7 @@ import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.DomainException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
+import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -26,6 +27,7 @@ public class GlobalExceptionHandler {
             ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED,
             EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
             CpfAlreadyInUseException.class, HttpStatus.CONFLICT,
+            IdempotencyKeyReusedException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             DomainValidationException.class, HttpStatus.BAD_REQUEST,
             AddressProviderUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE);

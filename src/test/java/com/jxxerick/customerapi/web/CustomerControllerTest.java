@@ -10,6 +10,7 @@ import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
@@ -17,7 +18,9 @@ import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableExcep
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CpfAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
+import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
+import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
@@ -38,6 +41,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.endsWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -77,6 +81,8 @@ class CustomerControllerTest {
     private GetCustomerStatsUseCase customerStats;
     @MockBean
     private FindCustomerByCpfUseCase findByCpf;
+    @MockBean
+    private IdempotentCreateCustomerUseCase idempotentCreate;
 
     @Test
     void renameShouldReturnUpdatedCustomer() throws Exception {
@@ -294,6 +300,62 @@ class CustomerControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.cpf").value("CPF é obrigatório"));
         verifyNoInteractions(findByCpf);
+    }
+
+    @Test
+    void createWithoutKeyShouldNotTouchTheIdempotencyStore() throws Exception {
+        when(createCustomer.execute(any())).thenReturn(Fixtures.customer());
+
+        mockMvc.perform(post("/api/customers").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(header().doesNotExist("Idempotent-Replayed"));
+        verifyNoInteractions(idempotentCreate);
+    }
+
+    @Test
+    void createWithKeyShouldUseIdempotentFlow() throws Exception {
+        Customer customer = Fixtures.customer();
+        when(idempotentCreate.execute(eq("req-12345678"), any()))
+                .thenReturn(new IdempotentCreateCustomerUseCase.Result(customer, false));
+
+        mockMvc.perform(post("/api/customers").header("Idempotency-Key", "req-12345678")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(header().doesNotExist("Idempotent-Replayed"))
+                .andExpect(header().string("Location", endsWith("/api/customers/" + customer.getId())));
+        verifyNoInteractions(createCustomer);
+    }
+
+    @Test
+    void replayShouldBeFlaggedInAHeader() throws Exception {
+        Customer customer = Fixtures.storedCustomer(0);
+        when(idempotentCreate.execute(eq("req-12345678"), any()))
+                .thenReturn(new IdempotentCreateCustomerUseCase.Result(customer, true));
+
+        mockMvc.perform(post("/api/customers").header("Idempotency-Key", "req-12345678")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotent-Replayed", "true"))
+                .andExpect(jsonPath("$.id").value(customer.getId().toString()));
+    }
+
+    @Test
+    void reusedKeyShouldReturn422() throws Exception {
+        when(idempotentCreate.execute(eq("req-12345678"), any()))
+                .thenThrow(new IdempotencyKeyReusedException("req-12345678"));
+
+        mockMvc.perform(post("/api/customers").header("Idempotency-Key", "req-12345678")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void malformedKeyShouldReturn400() throws Exception {
+        when(idempotentCreate.execute(eq("x"), any())).thenThrow(new DomainValidationException("chave inválida"));
+
+        mockMvc.perform(post("/api/customers").header("Idempotency-Key", "x")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
