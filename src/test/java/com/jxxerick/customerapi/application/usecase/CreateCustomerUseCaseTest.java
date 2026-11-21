@@ -2,7 +2,10 @@ package com.jxxerick.customerapi.application.usecase;
 
 import com.jxxerick.customerapi.application.command.CreateCustomerCommand;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
+import com.jxxerick.customerapi.domain.exception.CpfAlreadyInUseException;
+import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.ZipCode;
@@ -24,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,6 +70,51 @@ class CreateCustomerUseCaseTest {
 
         assertThatThrownBy(() -> useCase.execute(command)).isInstanceOf(EmailAlreadyInUseException.class);
         verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldStoreCpfWhenInformed() {
+        when(customerRepository.existsByEmail(any())).thenReturn(false);
+        when(customerRepository.existsByCpf(new Cpf("52998224725"))).thenReturn(false);
+        when(addressProvider.findByZipCode(any())).thenReturn(Optional.of(Fixtures.postalAddress()));
+        when(customerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Customer customer = useCase.execute(withCpf("529.982.247-25"));
+
+        assertThat(customer.getCpf()).contains(new Cpf("52998224725"));
+    }
+
+    @Test
+    void shouldFailWhenCpfIsAlreadyInUseWithoutCallingTheZipCodeService() {
+        when(customerRepository.existsByEmail(any())).thenReturn(false);
+        when(customerRepository.existsByCpf(new Cpf("52998224725"))).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.execute(withCpf("52998224725")))
+                .isInstanceOf(CpfAlreadyInUseException.class)
+                .hasMessage("CPF já cadastrado: ***.982.247-**");
+        verifyNoInteractions(addressProvider);
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectInvalidCpfBeforeAnyLookup() {
+        assertThatThrownBy(() -> useCase.execute(withCpf("123.456.789-00")))
+                .isInstanceOf(DomainValidationException.class);
+        verifyNoInteractions(customerRepository, addressProvider);
+    }
+
+    @Test
+    void shouldTreatBlankCpfAsAbsent() {
+        when(customerRepository.existsByEmail(any())).thenReturn(false);
+        when(addressProvider.findByZipCode(any())).thenReturn(Optional.of(Fixtures.postalAddress()));
+        when(customerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(useCase.execute(withCpf("  ")).getCpf()).isEmpty();
+        verify(customerRepository, never()).existsByCpf(any());
+    }
+
+    private static CreateCustomerCommand withCpf(String cpf) {
+        return new CreateCustomerCommand("Maria Silva", "maria@example.com", "01001-000", "100", null, cpf);
     }
 
     @Test

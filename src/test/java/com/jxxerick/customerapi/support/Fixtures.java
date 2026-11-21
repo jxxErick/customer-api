@@ -30,7 +30,7 @@ public final class Fixtures {
 
     /** Customer as if loaded from storage at the given version. */
     public static Customer storedCustomer(long version) {
-        return Customer.restore(UUID.randomUUID(), "Maria Silva", new Email("maria@example.com"), address(), NOW,
-                version);
+        return Customer.restore(UUID.randomUUID(), "Maria Silva", new Email("maria@example.com"), null, address(),
+                NOW, version);
     }
 }

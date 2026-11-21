@@ -1,6 +1,7 @@
 package com.jxxerick.customerapi.infrastructure.persistence;
 
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.LocationCount;
@@ -60,6 +61,16 @@ class JpaCustomerRepository implements CustomerRepository {
     @Override
     public boolean existsByEmail(Email email) {
         return jpa.existsByEmail(email.value());
+    }
+
+    @Override
+    public boolean existsByCpf(Cpf cpf) {
+        return jpa.existsByCpf(cpf.value());
+    }
+
+    @Override
+    public Optional<Customer> findByCpf(Cpf cpf) {
+        return jpa.findByCpf(cpf.value()).map(CustomerEntityMapper::toDomain);
     }
 
     @Override

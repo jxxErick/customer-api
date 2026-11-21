@@ -13,10 +13,12 @@ public record CreateCustomerRequest(
         String zipCode,
         @NotBlank(message = "Número é obrigatório")
         String number,
-        String complement
+        String complement,
+        @Size(max = 14, message = "CPF deve ter até 14 caracteres")
+        String cpf
 ) {
 
     public CreateCustomerCommand toCommand() {
-        return new CreateCustomerCommand(name, email, zipCode, number, complement);
+        return new CreateCustomerCommand(name, email, zipCode, number, complement, cpf);
     }
 }

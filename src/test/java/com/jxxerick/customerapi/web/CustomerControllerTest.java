@@ -7,6 +7,7 @@ import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
@@ -14,9 +15,12 @@ import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
+import com.jxxerick.customerapi.domain.exception.CpfAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.CustomerStats;
 import com.jxxerick.customerapi.domain.model.LocationCount;
 import com.jxxerick.customerapi.domain.model.PageResult;
@@ -71,6 +75,8 @@ class CustomerControllerTest {
     private DeleteCustomerUseCase deleteCustomer;
     @MockBean
     private GetCustomerStatsUseCase customerStats;
+    @MockBean
+    private FindCustomerByCpfUseCase findByCpf;
 
     @Test
     void renameShouldReturnUpdatedCustomer() throws Exception {
@@ -244,6 +250,50 @@ class CustomerControllerTest {
                 .andExpect(jsonPath("$.states[0].state").value("SP"))
                 .andExpect(jsonPath("$.states[0].percentage").value(75.0))
                 .andExpect(jsonPath("$.states[1].cities[0].city").value("Niterói"));
+    }
+
+    @Test
+    void createShouldForwardCpfAndReturnItMasked() throws Exception {
+        Customer customer = Customer.create("Maria Silva", new Email("maria@example.com"), new Cpf("52998224725"),
+                Fixtures.address(), Fixtures.NOW);
+        when(createCustomer.execute(new CreateCustomerCommand(
+                "Maria Silva", "maria@example.com", "01001-000", "100", null, "529.982.247-25"))).thenReturn(customer);
+
+        mockMvc.perform(post("/api/customers").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"name":"Maria Silva","email":"maria@example.com","zipCode":"01001-000","number":"100",
+                         "cpf":"529.982.247-25"}
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cpf").value("***.982.247-**"));
+    }
+
+    @Test
+    void createShouldReturn409WhenCpfInUse() throws Exception {
+        when(createCustomer.execute(any())).thenThrow(new CpfAlreadyInUseException(new Cpf("52998224725")));
+
+        mockMvc.perform(post("/api/customers").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("CPF já cadastrado: ***.982.247-**"));
+    }
+
+    @Test
+    void lookupShouldFindCustomerByCpfInTheBody() throws Exception {
+        Customer customer = Fixtures.storedCustomer(2);
+        when(findByCpf.execute("52998224725")).thenReturn(customer);
+
+        mockMvc.perform(post("/api/customers/lookup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cpf\":\"52998224725\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ETAG, "\"2\""))
+                .andExpect(jsonPath("$.id").value(customer.getId().toString()));
+    }
+
+    @Test
+    void lookupShouldReturn400WhenCpfIsMissing() throws Exception {
+        mockMvc.perform(post("/api/customers/lookup").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.cpf").value("CPF é obrigatório"));
+        verifyNoInteractions(findByCpf);
     }
 
     @Test

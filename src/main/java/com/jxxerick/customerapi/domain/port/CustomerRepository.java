@@ -1,5 +1,6 @@
 package com.jxxerick.customerapi.domain.port;
 
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.LocationCount;
@@ -22,6 +23,10 @@ public interface CustomerRepository {
     List<LocationCount> countByLocation();
 
     boolean existsByEmail(Email email);
+
+    boolean existsByCpf(Cpf cpf);
+
+    Optional<Customer> findByCpf(Cpf cpf);
 
     void delete(Customer customer);
 }

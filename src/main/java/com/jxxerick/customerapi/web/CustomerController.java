@@ -4,12 +4,14 @@ import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
+import com.jxxerick.customerapi.web.dto.CpfLookupRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
 import com.jxxerick.customerapi.web.dto.CustomerStatsResponse;
@@ -45,6 +47,7 @@ public class CustomerController {
     private final RenameCustomerUseCase renameCustomer;
     private final DeleteCustomerUseCase deleteCustomer;
     private final GetCustomerStatsUseCase customerStats;
+    private final FindCustomerByCpfUseCase findByCpf;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
@@ -52,7 +55,8 @@ public class CustomerController {
                               ChangeCustomerAddressUseCase changeAddress,
                               RenameCustomerUseCase renameCustomer,
                               DeleteCustomerUseCase deleteCustomer,
-                              GetCustomerStatsUseCase customerStats) {
+                              GetCustomerStatsUseCase customerStats,
+                              FindCustomerByCpfUseCase findByCpf) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
@@ -60,6 +64,7 @@ public class CustomerController {
         this.renameCustomer = renameCustomer;
         this.deleteCustomer = deleteCustomer;
         this.customerStats = customerStats;
+        this.findByCpf = findByCpf;
     }
 
     @PostMapping
@@ -83,6 +88,12 @@ public class CustomerController {
     @GetMapping("/stats")
     public CustomerStatsResponse stats() {
         return CustomerStatsResponse.from(customerStats.execute());
+    }
+
+    /** POST keeps the CPF out of the URL. */
+    @PostMapping("/lookup")
+    public ResponseEntity<CustomerResponse> lookupByCpf(@Valid @RequestBody CpfLookupRequest request) {
+        return withETag(ResponseEntity.ok(), findByCpf.execute(request.cpf()));
     }
 
     @GetMapping("/{id}")

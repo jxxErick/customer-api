@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.application.usecase;
 
 import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
@@ -34,6 +35,23 @@ class CustomerQueriesUseCaseTest {
         when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
 
         assertThat(new GetCustomerUseCase(customerRepository).execute(customer.getId())).isSameAs(customer);
+    }
+
+    @Test
+    void findByCpfShouldNormalizeTheDocument() {
+        Customer customer = Fixtures.customer();
+        when(customerRepository.findByCpf(new Cpf("52998224725"))).thenReturn(Optional.of(customer));
+
+        assertThat(new FindCustomerByCpfUseCase(customerRepository).execute("529.982.247-25")).isSameAs(customer);
+    }
+
+    @Test
+    void findByCpfShouldFailWithMaskedDocument() {
+        when(customerRepository.findByCpf(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> new FindCustomerByCpfUseCase(customerRepository).execute("52998224725"))
+                .isInstanceOf(CustomerNotFoundException.class)
+                .hasMessage("Nenhum cliente com o CPF ***.982.247-**");
     }
 
     @Test

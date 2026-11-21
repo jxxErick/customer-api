@@ -1,18 +1,22 @@
 package com.jxxerick.customerapi.web.dto;
 
 import com.jxxerick.customerapi.domain.model.Address;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 
 import java.time.Instant;
 import java.util.UUID;
 
-public record CustomerResponse(UUID id, String name, String email, AddressResponse address, Instant createdAt) {
+/** {@code cpf} is masked (***.982.247-**) and null when the customer has none. */
+public record CustomerResponse(UUID id, String name, String email, String cpf, AddressResponse address,
+                               Instant createdAt) {
 
     public static CustomerResponse from(Customer customer) {
         return new CustomerResponse(
                 customer.getId(),
                 customer.getName(),
                 customer.getEmail().value(),
+                customer.getCpf().map(Cpf::masked).orElse(null),
                 AddressResponse.from(customer.getAddress()),
                 customer.getCreatedAt());
     }

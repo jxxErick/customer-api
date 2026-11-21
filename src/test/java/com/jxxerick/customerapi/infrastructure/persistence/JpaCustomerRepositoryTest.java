@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.infrastructure.persistence;
 
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.model.Address;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.LocationCount;
@@ -103,6 +104,21 @@ class JpaCustomerRepositoryTest {
 
         assertThat(repository.existsByEmail(new Email("maria@example.com"))).isTrue();
         assertThat(repository.existsByEmail(new Email("other@example.com"))).isFalse();
+    }
+
+    @Test
+    void shouldFindByCpfAndAllowManyCustomersWithoutOne() {
+        Customer withCpf = repository.save(Customer.create("Maria Silva", new Email("maria@example.com"),
+                new Cpf("52998224725"), Fixtures.address(), Fixtures.NOW));
+        repository.save(customer("Ana Souza", "ana@example.com"));
+        repository.save(customer("João Pereira", "joao@example.com"));
+        entityManager.flush();
+
+        assertThat(repository.findByCpf(new Cpf("52998224725"))).get()
+                .extracting(Customer::getId).isEqualTo(withCpf.getId());
+        assertThat(repository.existsByCpf(new Cpf("11144477735"))).isFalse();
+        assertThat(repository.findById(withCpf.getId())).get()
+                .extracting(c -> c.getCpf().orElseThrow().value()).isEqualTo("52998224725");
     }
 
     @Test

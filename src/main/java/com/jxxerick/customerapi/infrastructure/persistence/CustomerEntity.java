@@ -22,6 +22,9 @@ public class CustomerEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(unique = true, length = 11)
+    private String cpf;
+
     @Column(name = "zip_code", nullable = false, length = 8)
     private String zipCode;
 
@@ -50,12 +53,13 @@ public class CustomerEntity {
     }
 
     @SuppressWarnings("java:S107")
-    CustomerEntity(UUID id, String name, String email, String zipCode, String street, String number,
+    CustomerEntity(UUID id, String name, String email, String cpf, String zipCode, String street, String number,
                    String complement, String neighborhood, String city, String state, Instant createdAt,
                    Long version) {
         this.id = id;
         this.name = name;
         this.email = email;
+        this.cpf = cpf;
         this.zipCode = zipCode;
         this.street = street;
         this.number = number;
@@ -77,6 +81,10 @@ public class CustomerEntity {
 
     String getEmail() {
         return email;
+    }
+
+    String getCpf() {
+        return cpf;
     }
 
     String getZipCode() {

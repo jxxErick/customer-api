@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 interface SpringDataCustomerRepository extends JpaRepository<CustomerEntity, UUID> {
@@ -13,6 +14,10 @@ interface SpringDataCustomerRepository extends JpaRepository<CustomerEntity, UUI
     Page<CustomerEntity> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
     boolean existsByEmail(String email);
+
+    boolean existsByCpf(String cpf);
+
+    Optional<CustomerEntity> findByCpf(String cpf);
 
     @Query("""
             select c.state as state, c.city as city, count(c) as customers

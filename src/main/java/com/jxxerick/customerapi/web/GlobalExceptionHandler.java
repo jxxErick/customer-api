@@ -3,6 +3,7 @@ package com.jxxerick.customerapi.web;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
+import com.jxxerick.customerapi.domain.exception.CpfAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.DomainException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
@@ -24,6 +25,7 @@ public class GlobalExceptionHandler {
             CustomerNotFoundException.class, HttpStatus.NOT_FOUND,
             ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED,
             EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
+            CpfAlreadyInUseException.class, HttpStatus.CONFLICT,
             AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             DomainValidationException.class, HttpStatus.BAD_REQUEST,
             AddressProviderUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE);
