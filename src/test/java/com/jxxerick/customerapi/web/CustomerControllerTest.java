@@ -9,6 +9,7 @@ import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
@@ -38,13 +39,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.endsWith;
@@ -54,17 +62,23 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CustomerController.class)
+@Import(CustomerControllerTest.FixedClock.class)
 class CustomerControllerTest {
 
     private static final String VALID_BODY = """
@@ -96,6 +110,16 @@ class CustomerControllerTest {
     private ImportCustomersUseCase importCustomers;
     @MockBean
     private GetCustomerHistoryUseCase customerHistory;
+    @MockBean
+    private ExportCustomersUseCase exportCustomers;
+
+    @TestConfiguration
+    static class FixedClock {
+        @Bean
+        Clock clock() {
+            return Clock.fixed(Fixtures.NOW, ZoneOffset.UTC);
+        }
+    }
 
     @Test
     void renameShouldReturnUpdatedCustomer() throws Exception {
@@ -461,5 +485,38 @@ class CustomerControllerTest {
 
         mockMvc.perform(get("/api/customers/{id}/history", id))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void exportShouldStreamCsvAttachment() throws Exception {
+        Customer customer = Fixtures.customer();
+        doAnswer(invocation -> {
+            ((Consumer<Customer>) invocation.getArgument(1)).accept(customer);
+            return 1L;
+        }).when(exportCustomers).execute(isNull(), any());
+
+        MvcResult started = mockMvc.perform(get("/api/customers/export"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(started))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8"))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"customers-2026-01-10.csv\""))
+                .andExpect(content().bytes(("\uFEFFname;email;zipCode;number;complement;street;neighborhood;city;state;createdAt\r\n"
+                        + "Maria Silva;maria@example.com;01001-000;100;Apto 12;Praça da Sé;Sé;São Paulo;SP;2026-01-10T12:00:00Z\r\n")
+                        .getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void exportShouldPassNameFilter() throws Exception {
+        MvcResult started = mockMvc.perform(get("/api/customers/export").param("name", "silva"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(started)).andExpect(status().isOk());
+
+        verify(exportCustomers).execute(eq("silva"), any());
     }
 }

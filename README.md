@@ -57,6 +57,7 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `POST` | `/api/customers/lookup` | Busca cliente pelo CPF (enviado no corpo) |
 | `POST` | `/api/customers/import` | Importa clientes de um CSV (`text/csv` ou upload `file`) |
 | `GET` | `/api/customers?name=&page=0&size=20` | Lista clientes paginada, com filtro por nome |
+| `GET` | `/api/customers/export?name=` | Exporta clientes em CSV (mesmo formato da importação) |
 | `GET` | `/api/customers/stats` | Clientes por estado e cidade |
 | `GET` | `/api/customers/{id}` | Busca cliente (devolve `ETag`) |
 | `PUT` | `/api/customers/{id}/address` | Troca o endereço (aceita `If-Match`) |
@@ -156,6 +157,20 @@ A resposta é um relatório por linha (o número é a linha física do arquivo, 
   ]
 }
 ```
+
+### Exportação (CSV)
+
+`GET /api/customers/export?name=` baixa os clientes (todos ou só os que batem com o filtro) como
+`customers-AAAA-MM-DD.csv`, separado por `;` e com BOM UTF-8 para o Excel em pt-BR abrir com
+acento certo.
+
+- As colunas são as mesmas da importação (mais rua, bairro, cidade, UF e data de criação, que a
+  importação ignora), então **um export pode ser importado de volta** em outra base.
+- A resposta é um `StreamingResponseBody`: o `ExportCustomersUseCase` percorre o banco de 500 em
+  500 e escreve cada linha direto na resposta, sem montar a tabela inteira na memória.
+- Proteção contra **CSV injection**: células que começam com `=`, `+`, `-`, `@`, tab ou CR ganham
+  um `'` na frente (o Excel não executa como fórmula); a importação remove esse `'` de volta.
+- O CPF fica de fora de propósito: a API nunca entrega o CPF sem máscara.
 
 ### Estatísticas
 

@@ -6,6 +6,7 @@ import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
@@ -15,7 +16,9 @@ import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.web.csv.CsvWriter;
 import com.jxxerick.customerapi.web.csv.CustomerCsvReader;
+import com.jxxerick.customerapi.web.csv.CustomerCsvWriter;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
 import com.jxxerick.customerapi.web.dto.CustomerChangeResponse;
 import com.jxxerick.customerapi.web.dto.CpfLookupRequest;
@@ -26,6 +29,7 @@ import com.jxxerick.customerapi.web.dto.ImportReportResponse;
 import com.jxxerick.customerapi.web.dto.PageResponse;
 import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -41,11 +45,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -68,6 +78,8 @@ public class CustomerController {
     private final IdempotentCreateCustomerUseCase idempotentCreate;
     private final ImportCustomersUseCase importCustomers;
     private final GetCustomerHistoryUseCase customerHistory;
+    private final ExportCustomersUseCase exportCustomers;
+    private final Clock clock;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
@@ -79,7 +91,9 @@ public class CustomerController {
                               FindCustomerByCpfUseCase findByCpf,
                               IdempotentCreateCustomerUseCase idempotentCreate,
                               ImportCustomersUseCase importCustomers,
-                              GetCustomerHistoryUseCase customerHistory) {
+                              GetCustomerHistoryUseCase customerHistory,
+                              ExportCustomersUseCase exportCustomers,
+                              Clock clock) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
@@ -91,6 +105,8 @@ public class CustomerController {
         this.idempotentCreate = idempotentCreate;
         this.importCustomers = importCustomers;
         this.customerHistory = customerHistory;
+        this.exportCustomers = exportCustomers;
+        this.clock = clock;
     }
 
     /** With an Idempotency-Key, a retry returns the customer created the first time. */
@@ -142,6 +158,28 @@ public class CustomerController {
                                                @RequestParam(defaultValue = "20") int size) {
         return PageResponse.from(listCustomers.execute(new ListCustomersQuery(name, page, size))
                 .map(CustomerResponse::from));
+    }
+
+    /**
+     * Streams every customer (or those matching {@code name}) as a CSV that the import reads back:
+     * semicolon-separated with a UTF-8 BOM, so Excel in pt-BR opens it right away.
+     */
+    @GetMapping(path = "/export", produces = TEXT_CSV)
+    public ResponseEntity<StreamingResponseBody> export(@RequestParam(required = false) String name) {
+        String filename = "customers-" + LocalDate.now(clock) + ".csv";
+        StreamingResponseBody body = output -> {
+            Writer writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8));
+            writer.write('﻿');
+            CustomerCsvWriter csv = new CustomerCsvWriter(new CsvWriter(writer, ';'));
+            csv.writeHeader();
+            exportCustomers.execute(name, csv::write);
+            writer.flush();
+        };
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(filename).build().toString())
+                .body(body);
     }
 
     @GetMapping("/stats")
