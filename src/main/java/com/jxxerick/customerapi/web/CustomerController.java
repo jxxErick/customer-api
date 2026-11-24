@@ -8,12 +8,14 @@ import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
+import com.jxxerick.customerapi.application.usecase.FindDuplicateCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.csv.CsvWriter;
@@ -25,7 +27,9 @@ import com.jxxerick.customerapi.web.dto.CpfLookupRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
 import com.jxxerick.customerapi.web.dto.CustomerStatsResponse;
+import com.jxxerick.customerapi.web.dto.DuplicateCandidateResponse;
 import com.jxxerick.customerapi.web.dto.ImportReportResponse;
+import com.jxxerick.customerapi.web.dto.MergeCustomersRequest;
 import com.jxxerick.customerapi.web.dto.PageResponse;
 import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
 import jakarta.validation.Valid;
@@ -79,6 +83,8 @@ public class CustomerController {
     private final ImportCustomersUseCase importCustomers;
     private final GetCustomerHistoryUseCase customerHistory;
     private final ExportCustomersUseCase exportCustomers;
+    private final FindDuplicateCustomersUseCase findDuplicates;
+    private final MergeCustomersUseCase mergeCustomers;
     private final Clock clock;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
@@ -93,6 +99,8 @@ public class CustomerController {
                               ImportCustomersUseCase importCustomers,
                               GetCustomerHistoryUseCase customerHistory,
                               ExportCustomersUseCase exportCustomers,
+                              FindDuplicateCustomersUseCase findDuplicates,
+                              MergeCustomersUseCase mergeCustomers,
                               Clock clock) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
@@ -106,6 +114,8 @@ public class CustomerController {
         this.importCustomers = importCustomers;
         this.customerHistory = customerHistory;
         this.exportCustomers = exportCustomers;
+        this.findDuplicates = findDuplicates;
+        this.mergeCustomers = mergeCustomers;
         this.clock = clock;
     }
 
@@ -185,6 +195,23 @@ public class CustomerController {
     @GetMapping("/stats")
     public CustomerStatsResponse stats() {
         return CustomerStatsResponse.from(customerStats.execute());
+    }
+
+    /** Probable duplicates (similar names, same e-mail user, same zip code), best match first. */
+    @GetMapping("/duplicates")
+    public List<DuplicateCandidateResponse> duplicates(
+            @RequestParam(defaultValue = "" + FindDuplicateCustomersUseCase.DEFAULT_MIN_SCORE) double minScore) {
+        return findDuplicates.execute(minScore).stream().map(DuplicateCandidateResponse::from).toList();
+    }
+
+    /** Folds {@code duplicateId} into this customer and deletes the duplicate. */
+    @PostMapping("/{id}/merge")
+    public ResponseEntity<CustomerResponse> merge(
+            @PathVariable UUID id,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @Valid @RequestBody MergeCustomersRequest request) {
+        Customer customer = mergeCustomers.execute(request.toCommand(id, ETags.parseIfMatch(ifMatch)));
+        return withETag(ResponseEntity.ok(), customer);
     }
 
     /** POST keeps the CPF out of the URL. */

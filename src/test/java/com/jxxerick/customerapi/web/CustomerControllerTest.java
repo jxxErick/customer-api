@@ -5,23 +5,27 @@ import com.jxxerick.customerapi.application.command.CreateCustomerCommand;
 import com.jxxerick.customerapi.application.command.CustomerHistoryQuery;
 import com.jxxerick.customerapi.application.command.ImportRow;
 import com.jxxerick.customerapi.application.command.ListCustomersQuery;
+import com.jxxerick.customerapi.application.command.MergeCustomersCommand;
 import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
+import com.jxxerick.customerapi.application.usecase.FindDuplicateCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CpfAlreadyInUseException;
+import com.jxxerick.customerapi.domain.exception.CustomerMergeConflictException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
@@ -30,6 +34,7 @@ import com.jxxerick.customerapi.domain.exception.ImportTooLargeException;
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.CustomerChange;
+import com.jxxerick.customerapi.domain.model.DuplicateCandidate;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.CustomerStats;
 import com.jxxerick.customerapi.domain.model.LocationCount;
@@ -112,6 +117,10 @@ class CustomerControllerTest {
     private GetCustomerHistoryUseCase customerHistory;
     @MockBean
     private ExportCustomersUseCase exportCustomers;
+    @MockBean
+    private FindDuplicateCustomersUseCase findDuplicates;
+    @MockBean
+    private MergeCustomersUseCase mergeCustomers;
 
     @TestConfiguration
     static class FixedClock {
@@ -518,5 +527,66 @@ class CustomerControllerTest {
         mockMvc.perform(asyncDispatch(started)).andExpect(status().isOk());
 
         verify(exportCustomers).execute(eq("silva"), any());
+    }
+
+    @Test
+    void duplicatesShouldUseDefaultMinScore() throws Exception {
+        Customer first = Fixtures.customer();
+        Customer second = Customer.create("MARIA SILVA", new Email("msilva@example.com"), Fixtures.address(),
+                Fixtures.NOW);
+        DuplicateCandidate candidate = DuplicateCandidate.evaluate(first, second).orElseThrow();
+        when(findDuplicates.execute(FindDuplicateCustomersUseCase.DEFAULT_MIN_SCORE)).thenReturn(List.of(candidate));
+
+        mockMvc.perform(get("/api/customers/duplicates"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].first.name").value("Maria Silva"))
+                .andExpect(jsonPath("$[0].second.name").value("MARIA SILVA"))
+                .andExpect(jsonPath("$[0].score").value(1.0))
+                .andExpect(jsonPath("$[0].reasons[0]").value("SAME_NAME"))
+                .andExpect(jsonPath("$[0].reasons[1]").value("SAME_ZIP_CODE"));
+    }
+
+    @Test
+    void duplicatesShouldPassMinScore() throws Exception {
+        when(findDuplicates.execute(0.95)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/customers/duplicates").param("minScore", "0.95"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void mergeShouldReturnTargetWithETag() throws Exception {
+        Customer target = Fixtures.storedCustomer(3);
+        UUID duplicateId = UUID.randomUUID();
+        when(mergeCustomers.execute(new MergeCustomersCommand(target.getId(), duplicateId, 2L))).thenReturn(target);
+
+        mockMvc.perform(post("/api/customers/{id}/merge", target.getId())
+                        .header(HttpHeaders.IF_MATCH, "\"2\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"duplicateId\":\"" + duplicateId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ETAG, "\"3\""))
+                .andExpect(jsonPath("$.id").value(target.getId().toString()));
+    }
+
+    @Test
+    void mergeShouldReturn400WithoutDuplicateId() throws Exception {
+        mockMvc.perform(post("/api/customers/{id}/merge", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.duplicateId").value("Cliente duplicado é obrigatório"));
+        verifyNoInteractions(mergeCustomers);
+    }
+
+    @Test
+    void mergeShouldReturn409ForDifferentCpfs() throws Exception {
+        when(mergeCustomers.execute(any())).thenThrow(
+                new CustomerMergeConflictException("Os clientes têm CPFs diferentes e não podem ser mesclados"));
+
+        mockMvc.perform(post("/api/customers/{id}/merge", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"duplicateId\":\"" + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isConflict());
     }
 }

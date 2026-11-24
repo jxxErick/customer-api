@@ -59,10 +59,12 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `GET` | `/api/customers?name=&page=0&size=20` | Lista clientes paginada, com filtro por nome |
 | `GET` | `/api/customers/export?name=` | Exporta clientes em CSV (mesmo formato da importação) |
 | `GET` | `/api/customers/stats` | Clientes por estado e cidade |
+| `GET` | `/api/customers/duplicates?minScore=0.85` | Prováveis clientes duplicados, com nota e motivo |
 | `GET` | `/api/customers/{id}` | Busca cliente (devolve `ETag`) |
 | `PUT` | `/api/customers/{id}/address` | Troca o endereço (aceita `If-Match`) |
 | `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente (aceita `If-Match`) |
 | `GET` | `/api/customers/{id}/history?page=0&size=20` | Histórico de alterações (mais recente primeiro) |
+| `POST` | `/api/customers/{id}/merge` | Junta um duplicado neste cliente (aceita `If-Match`) |
 | `DELETE` | `/api/customers/{id}` | Remove cliente |
 
 A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
@@ -72,7 +74,7 @@ não conhece o `Pageable` do Spring.
 
 Erros seguem o padrão **RFC 7807** (`application/problem+json`):
 `400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente inexistente ·
-`409` e-mail ou CPF duplicado · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
+`409` e-mail ou CPF duplicado, ou merge de CPFs diferentes · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
 `422` CEP não encontrado ou `Idempotency-Key` reaproveitada · `503` ViaCEP fora do ar.
 
 ### Concorrência otimista (ETag / If-Match)
@@ -191,9 +193,9 @@ ficam em `CustomerStats`, no domínio.
 ### Histórico de alterações
 
 Toda mudança num cliente vira uma entrada de auditoria (`CustomerChange`): `CREATED`, `RENAMED`,
-`ADDRESS_CHANGED` e `DELETED`, cada uma com os campos que mudaram (`from` → `to`). O endereço
+`ADDRESS_CHANGED`, `DELETED`, `MERGED` e `MERGED_INTO`, cada uma com os campos que mudaram (`from` → `to`). O endereço
 entra como uma linha só (`Praça da Sé, 100 - Apto 12, Sé, São Paulo/SP, 01001-000`) e o CPF nunca
-aparece no histórico.
+aparece no histórico (só mascarado, quando um merge herda o CPF).
 
 - Os casos de uso gravam pela porta `CustomerHistory`; o adaptador JPA guarda os campos numa
   `@ElementCollection` ordenada.
@@ -213,6 +215,37 @@ aparece no histórico.
   "page": 0, "size": 20, "totalItems": 2, "totalPages": 1
 }
 ```
+
+### Duplicados e mesclagem
+
+Cadastro em lote e formulário aberto geram clientes repetidos com nome escrito diferente.
+`GET /api/customers/duplicates?minScore=0.85` compara todos os pares e devolve os prováveis
+duplicados, do mais parecido para o menos:
+
+- os nomes são normalizados (sem acento, minúsculos, só letras) e comparados com **Jaro-Winkler**,
+  também com as palavras ordenadas, então `Silva Maria` bate com `Maria Silva` e `Maira` com `Maria`;
+- o mesmo usuário de e-mail (`Maria.Silva+promo@gmail.com` e `mariasilva@hotmail.com`, ignorando
+  pontos e o `+tag`) soma 0,10 e o mesmo CEP soma 0,05, com teto de 1;
+- cada par diz o porquê: `SAME_NAME`, `SIMILAR_NAME`, `SAME_EMAIL_USER`, `SAME_ZIP_CODE`;
+- a comparação é O(n²) de propósito (pega erro de digitação em qualquer letra, até na primeira) e
+  devolve no máximo 200 pares; `minScore` vai de 0,5 a 1.
+
+```json
+[
+  { "first": { "id": "6f1c...", "name": "Maria Silva", "...": "..." },
+    "second": { "id": "a93e...", "name": "Maira Silva", "...": "..." },
+    "score": 0.976, "reasons": ["SIMILAR_NAME", "SAME_ZIP_CODE"] }
+]
+```
+
+`POST /api/customers/{id}/merge` com `{"duplicateId": "..."}` junta o duplicado no cliente `{id}`:
+
+- o cliente `{id}` mantém nome, e-mail e endereço e **herda o CPF** do duplicado se não tiver um;
+- CPFs diferentes significam pessoas diferentes: `409` e nada muda;
+- o duplicado é apagado **antes** de o alvo gravar o CPF herdado, para a constraint única não reclamar;
+- aceita `If-Match` com a versão do alvo e devolve o alvo com o `ETag` novo;
+- o histórico ganha `MERGED` no alvo (`mergedFrom` e o CPF herdado, mascarado) e `MERGED_INTO` no
+  duplicado, que continua consultável depois de apagado.
 
 ### Exemplo
 

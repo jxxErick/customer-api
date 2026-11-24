@@ -6,11 +6,13 @@ import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
+import com.jxxerick.customerapi.application.usecase.FindDuplicateCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerHistory;
@@ -93,5 +95,16 @@ public class UseCaseConfiguration {
     @Bean
     GetCustomerHistoryUseCase getCustomerHistoryUseCase(CustomerHistory history) {
         return new GetCustomerHistoryUseCase(history);
+    }
+
+    @Bean
+    FindDuplicateCustomersUseCase findDuplicateCustomersUseCase(CustomerRepository repository) {
+        return new FindDuplicateCustomersUseCase(repository);
+    }
+
+    @Bean
+    MergeCustomersUseCase mergeCustomersUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
+                                                CustomerHistory history, Clock clock) {
+        return new MergeCustomersUseCase(getCustomer, repository, history, clock);
     }
 }

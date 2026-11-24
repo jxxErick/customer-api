@@ -4,6 +4,7 @@ import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.exception.CpfAlreadyInUseException;
+import com.jxxerick.customerapi.domain.exception.CustomerMergeConflictException;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
 import com.jxxerick.customerapi.domain.exception.DomainException;
 import com.jxxerick.customerapi.domain.exception.DomainValidationException;
@@ -29,6 +30,7 @@ public class GlobalExceptionHandler {
             ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED,
             EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
             CpfAlreadyInUseException.class, HttpStatus.CONFLICT,
+            CustomerMergeConflictException.class, HttpStatus.CONFLICT,
             IdempotencyKeyReusedException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             ImportTooLargeException.class, HttpStatus.PAYLOAD_TOO_LARGE,
             AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,

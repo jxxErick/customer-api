@@ -1,6 +1,7 @@
 package com.jxxerick.customerapi.domain.model;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,5 +34,21 @@ public record CustomerChange(UUID customerId, ChangeType type, List<FieldChange>
 
     public static CustomerChange deleted(Customer customer, Instant now) {
         return new CustomerChange(customer.getId(), ChangeType.DELETED, List.of(), now);
+    }
+
+    /** Entry on the customer that absorbed a duplicate; {@code inheritedCpf} may be null. */
+    public static CustomerChange merged(Customer target, Customer duplicate, Cpf inheritedCpf, Instant now) {
+        List<FieldChange> fields = new ArrayList<>();
+        fields.add(new FieldChange("mergedFrom", null, duplicate.getId().toString()));
+        if (inheritedCpf != null) {
+            fields.add(new FieldChange("cpf", null, inheritedCpf.masked()));
+        }
+        return new CustomerChange(target.getId(), ChangeType.MERGED, fields, now);
+    }
+
+    /** Entry on the duplicate that was removed by a merge. */
+    public static CustomerChange mergedInto(Customer duplicate, Customer target, Instant now) {
+        return new CustomerChange(duplicate.getId(), ChangeType.MERGED_INTO,
+                List.of(new FieldChange("mergedInto", null, target.getId().toString())), now);
     }
 }
