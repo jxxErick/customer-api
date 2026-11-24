@@ -13,7 +13,7 @@ public record ChangeAddressRequest(
         String complement
 ) {
 
-    public ChangeAddressCommand toCommand(UUID customerId) {
-        return new ChangeAddressCommand(customerId, zipCode, number, complement);
+    public ChangeAddressCommand toCommand(UUID customerId, Long expectedVersion) {
+        return new ChangeAddressCommand(customerId, zipCode, number, complement, expectedVersion);
     }
 }

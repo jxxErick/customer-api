@@ -4,9 +4,15 @@ import com.jxxerick.customerapi.application.usecase.AddressResolver;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
+import com.jxxerick.customerapi.domain.port.CustomerHistory;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,8 +34,9 @@ public class UseCaseConfiguration {
     }
 
     @Bean
-    CreateCustomerUseCase createCustomerUseCase(CustomerRepository repository, AddressResolver resolver, Clock clock) {
-        return new CreateCustomerUseCase(repository, resolver, clock);
+    CreateCustomerUseCase createCustomerUseCase(CustomerRepository repository, AddressResolver resolver,
+                                                CustomerHistory history, Clock clock) {
+        return new CreateCustomerUseCase(repository, resolver, history, clock);
     }
 
     @Bean
@@ -38,19 +45,47 @@ public class UseCaseConfiguration {
     }
 
     @Bean
+    FindCustomerByCpfUseCase findCustomerByCpfUseCase(CustomerRepository repository) {
+        return new FindCustomerByCpfUseCase(repository);
+    }
+
+    @Bean
+    ImportCustomersUseCase importCustomersUseCase(CreateCustomerUseCase createCustomer) {
+        return new ImportCustomersUseCase(createCustomer);
+    }
+
+    @Bean
     ListCustomersUseCase listCustomersUseCase(CustomerRepository repository) {
         return new ListCustomersUseCase(repository);
     }
 
     @Bean
-    ChangeCustomerAddressUseCase changeCustomerAddressUseCase(GetCustomerUseCase getCustomer,
-                                                              CustomerRepository repository,
-                                                              AddressResolver resolver) {
-        return new ChangeCustomerAddressUseCase(getCustomer, repository, resolver);
+    GetCustomerStatsUseCase getCustomerStatsUseCase(CustomerRepository repository) {
+        return new GetCustomerStatsUseCase(repository);
     }
 
     @Bean
-    DeleteCustomerUseCase deleteCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository) {
-        return new DeleteCustomerUseCase(getCustomer, repository);
+    ChangeCustomerAddressUseCase changeCustomerAddressUseCase(GetCustomerUseCase getCustomer,
+                                                              CustomerRepository repository,
+                                                              AddressResolver resolver,
+                                                              CustomerHistory history, Clock clock) {
+        return new ChangeCustomerAddressUseCase(getCustomer, repository, resolver, history, clock);
+    }
+
+    @Bean
+    RenameCustomerUseCase renameCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
+                                                CustomerHistory history, Clock clock) {
+        return new RenameCustomerUseCase(getCustomer, repository, history, clock);
+    }
+
+    @Bean
+    DeleteCustomerUseCase deleteCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
+                                                CustomerHistory history, Clock clock) {
+        return new DeleteCustomerUseCase(getCustomer, repository, history, clock);
+    }
+
+    @Bean
+    GetCustomerHistoryUseCase getCustomerHistoryUseCase(CustomerHistory history) {
+        return new GetCustomerHistoryUseCase(history);
     }
 }

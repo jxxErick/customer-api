@@ -1,14 +1,22 @@
 package com.jxxerick.customerapi.application.usecase;
 
+import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.domain.exception.CustomerNotFoundException;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
+import com.jxxerick.customerapi.domain.model.ChangeType;
+import com.jxxerick.customerapi.domain.model.CustomerChange;
 import com.jxxerick.customerapi.support.Fixtures;
+import com.jxxerick.customerapi.support.RecordingHistory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,12 +34,32 @@ class CustomerQueriesUseCaseTest {
     @Mock
     private CustomerRepository customerRepository;
 
+    private final RecordingHistory history = new RecordingHistory();
+    private final Clock clock = Clock.fixed(Fixtures.NOW, ZoneOffset.UTC);
+
     @Test
     void getShouldReturnExistingCustomer() {
         Customer customer = Fixtures.customer();
         when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
 
         assertThat(new GetCustomerUseCase(customerRepository).execute(customer.getId())).isSameAs(customer);
+    }
+
+    @Test
+    void findByCpfShouldNormalizeTheDocument() {
+        Customer customer = Fixtures.customer();
+        when(customerRepository.findByCpf(new Cpf("52998224725"))).thenReturn(Optional.of(customer));
+
+        assertThat(new FindCustomerByCpfUseCase(customerRepository).execute("529.982.247-25")).isSameAs(customer);
+    }
+
+    @Test
+    void findByCpfShouldFailWithMaskedDocument() {
+        when(customerRepository.findByCpf(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> new FindCustomerByCpfUseCase(customerRepository).execute("52998224725"))
+                .isInstanceOf(CustomerNotFoundException.class)
+                .hasMessage("Nenhum cliente com o CPF ***.982.247-**");
     }
 
     @Test
@@ -44,11 +72,21 @@ class CustomerQueriesUseCaseTest {
     }
 
     @Test
-    void listShouldReturnAllCustomers() {
-        List<Customer> customers = List.of(Fixtures.customer());
-        when(customerRepository.findAll()).thenReturn(customers);
+    void listShouldSearchWithNormalizedQuery() {
+        PageResult<Customer> page = new PageResult<>(List.of(Fixtures.customer()), 0, 100, 1);
+        when(customerRepository.search("maria", 0, 100)).thenReturn(page);
 
-        assertThat(new ListCustomersUseCase(customerRepository).execute()).isEqualTo(customers);
+        assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery("  maria ", -3, 500)))
+                .isEqualTo(page);
+    }
+
+    @Test
+    void listShouldTreatBlankNameAsNoFilter() {
+        PageResult<Customer> empty = new PageResult<>(List.of(), 0, 1, 0);
+        when(customerRepository.search(null, 0, 1)).thenReturn(empty);
+
+        assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery(" ", 0, 0)))
+                .isEqualTo(empty);
     }
 
     @Test
@@ -56,10 +94,11 @@ class CustomerQueriesUseCaseTest {
         Customer customer = Fixtures.customer();
         when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
 
-        new DeleteCustomerUseCase(new GetCustomerUseCase(customerRepository), customerRepository)
+        new DeleteCustomerUseCase(new GetCustomerUseCase(customerRepository), customerRepository, history, clock)
                 .execute(customer.getId());
 
         verify(customerRepository).delete(customer);
+        assertThat(history.recorded()).extracting(CustomerChange::type).containsExactly(ChangeType.DELETED);
     }
 
     @Test
@@ -67,7 +106,7 @@ class CustomerQueriesUseCaseTest {
         UUID id = UUID.randomUUID();
         when(customerRepository.findById(id)).thenReturn(Optional.empty());
         DeleteCustomerUseCase useCase =
-                new DeleteCustomerUseCase(new GetCustomerUseCase(customerRepository), customerRepository);
+                new DeleteCustomerUseCase(new GetCustomerUseCase(customerRepository), customerRepository, history, clock);
 
         assertThatThrownBy(() -> useCase.execute(id)).isInstanceOf(CustomerNotFoundException.class);
         verify(customerRepository, never()).delete(any());

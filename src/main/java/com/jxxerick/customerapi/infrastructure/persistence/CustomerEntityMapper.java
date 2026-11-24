@@ -1,6 +1,7 @@
 package com.jxxerick.customerapi.infrastructure.persistence;
 
 import com.jxxerick.customerapi.domain.model.Address;
+import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.PostalAddress;
@@ -18,6 +19,7 @@ final class CustomerEntityMapper {
                 customer.getId(),
                 customer.getName(),
                 customer.getEmail().value(),
+                customer.getCpf().map(Cpf::value).orElse(null),
                 postal.zipCode().value(),
                 postal.street(),
                 address.number(),
@@ -25,7 +27,8 @@ final class CustomerEntityMapper {
                 postal.neighborhood(),
                 postal.city(),
                 postal.state(),
-                customer.getCreatedAt());
+                customer.getCreatedAt(),
+                customer.getVersion());
     }
 
     static Customer toDomain(CustomerEntity entity) {
@@ -37,6 +40,8 @@ final class CustomerEntityMapper {
                 entity.getState());
         Address address = new Address(postal, entity.getNumber(), entity.getComplement());
         return Customer.restore(
-                entity.getId(), entity.getName(), new Email(entity.getEmail()), address, entity.getCreatedAt());
+                entity.getId(), entity.getName(), new Email(entity.getEmail()),
+                entity.getCpf() == null ? null : new Cpf(entity.getCpf()), address, entity.getCreatedAt(),
+                entity.getVersion());
     }
 }

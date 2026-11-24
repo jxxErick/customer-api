@@ -43,8 +43,8 @@ class CustomerTest {
     void shouldBeEqualByIdentity() {
         UUID id = UUID.randomUUID();
         Email email = new Email("maria@example.com");
-        Customer first = Customer.restore(id, "Maria", email, Fixtures.address(), Fixtures.NOW);
-        Customer second = Customer.restore(id, "Other name", email, Fixtures.address(), Fixtures.NOW);
+        Customer first = Customer.restore(id, "Maria", email, null, Fixtures.address(), Fixtures.NOW, 0L);
+        Customer second = Customer.restore(id, "Other name", email, null, Fixtures.address(), Fixtures.NOW, 0L);
 
         assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
     }
