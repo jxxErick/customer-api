@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.web;
 
 import com.jxxerick.customerapi.application.command.ChangeAddressCommand;
 import com.jxxerick.customerapi.application.command.CreateCustomerCommand;
+import com.jxxerick.customerapi.application.command.CustomerHistoryQuery;
 import com.jxxerick.customerapi.application.command.ImportRow;
 import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.command.RenameCustomerCommand;
@@ -9,6 +10,7 @@ import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
@@ -26,6 +28,7 @@ import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
 import com.jxxerick.customerapi.domain.exception.ImportTooLargeException;
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.CustomerChange;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.CustomerStats;
 import com.jxxerick.customerapi.domain.model.LocationCount;
@@ -91,6 +94,8 @@ class CustomerControllerTest {
     private IdempotentCreateCustomerUseCase idempotentCreate;
     @MockBean
     private ImportCustomersUseCase importCustomers;
+    @MockBean
+    private GetCustomerHistoryUseCase customerHistory;
 
     @Test
     void renameShouldReturnUpdatedCustomer() throws Exception {
@@ -427,5 +432,34 @@ class CustomerControllerTest {
         doThrow(new CustomerNotFoundException(id)).when(deleteCustomer).execute(id);
 
         mockMvc.perform(delete("/api/customers/{id}", id)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void historyShouldReturnChangesPage() throws Exception {
+        Customer customer = Fixtures.customer();
+        String before = customer.getName();
+        customer.rename("Maria Souza");
+        CustomerChange renamed = CustomerChange.renamed(customer, before, Fixtures.NOW);
+        when(customerHistory.execute(new CustomerHistoryQuery(customer.getId(), 0, 5)))
+                .thenReturn(new PageResult<>(List.of(renamed), 0, 5, 2));
+
+        mockMvc.perform(get("/api/customers/{id}/history", customer.getId()).param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].type").value("RENAMED"))
+                .andExpect(jsonPath("$.items[0].occurredAt").value("2026-01-10T12:00:00Z"))
+                .andExpect(jsonPath("$.items[0].changes[0].field").value("name"))
+                .andExpect(jsonPath("$.items[0].changes[0].from").value("Maria Silva"))
+                .andExpect(jsonPath("$.items[0].changes[0].to").value("Maria Souza"))
+                .andExpect(jsonPath("$.totalItems").value(2));
+    }
+
+    @Test
+    void historyShouldReturn404ForUnknownCustomer() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(customerHistory.execute(new CustomerHistoryQuery(id, 0, 20)))
+                .thenThrow(new CustomerNotFoundException(id));
+
+        mockMvc.perform(get("/api/customers/{id}/history", id))
+                .andExpect(status().isNotFound());
     }
 }

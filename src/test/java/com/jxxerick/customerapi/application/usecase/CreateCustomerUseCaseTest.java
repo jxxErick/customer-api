@@ -11,7 +11,9 @@ import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.ZipCode;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
+import com.jxxerick.customerapi.domain.model.ChangeType;
 import com.jxxerick.customerapi.support.Fixtures;
+import com.jxxerick.customerapi.support.RecordingHistory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +41,8 @@ class CreateCustomerUseCaseTest {
     @Mock
     private AddressProvider addressProvider;
 
+    private final RecordingHistory history = new RecordingHistory();
+
     private CreateCustomerUseCase useCase;
 
     private final CreateCustomerCommand command =
@@ -47,7 +51,7 @@ class CreateCustomerUseCaseTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Fixtures.NOW, ZoneOffset.UTC);
-        useCase = new CreateCustomerUseCase(customerRepository, new AddressResolver(addressProvider), clock);
+        useCase = new CreateCustomerUseCase(customerRepository, new AddressResolver(addressProvider), history, clock);
     }
 
     @Test
@@ -62,6 +66,11 @@ class CreateCustomerUseCaseTest {
         assertThat(customer.getAddress().postal().city()).isEqualTo("São Paulo");
         assertThat(customer.getAddress().number()).isEqualTo("100");
         assertThat(customer.getCreatedAt()).isEqualTo(Fixtures.NOW);
+        assertThat(history.recorded()).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.CREATED);
+            assertThat(change.customerId()).isEqualTo(customer.getId());
+            assertThat(change.fields()).extracting("field").containsExactly("name", "email", "address");
+        });
     }
 
     @Test

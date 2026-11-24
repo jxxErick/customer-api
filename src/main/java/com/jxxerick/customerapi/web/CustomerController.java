@@ -1,11 +1,13 @@
 package com.jxxerick.customerapi.web;
 
+import com.jxxerick.customerapi.application.command.CustomerHistoryQuery;
 import com.jxxerick.customerapi.application.command.ImportRow;
 import com.jxxerick.customerapi.application.command.ListCustomersQuery;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
+import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseCase;
@@ -15,6 +17,7 @@ import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.csv.CustomerCsvReader;
 import com.jxxerick.customerapi.web.dto.ChangeAddressRequest;
+import com.jxxerick.customerapi.web.dto.CustomerChangeResponse;
 import com.jxxerick.customerapi.web.dto.CpfLookupRequest;
 import com.jxxerick.customerapi.web.dto.CreateCustomerRequest;
 import com.jxxerick.customerapi.web.dto.CustomerResponse;
@@ -64,6 +67,7 @@ public class CustomerController {
     private final FindCustomerByCpfUseCase findByCpf;
     private final IdempotentCreateCustomerUseCase idempotentCreate;
     private final ImportCustomersUseCase importCustomers;
+    private final GetCustomerHistoryUseCase customerHistory;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
                               GetCustomerUseCase getCustomer,
@@ -74,7 +78,8 @@ public class CustomerController {
                               GetCustomerStatsUseCase customerStats,
                               FindCustomerByCpfUseCase findByCpf,
                               IdempotentCreateCustomerUseCase idempotentCreate,
-                              ImportCustomersUseCase importCustomers) {
+                              ImportCustomersUseCase importCustomers,
+                              GetCustomerHistoryUseCase customerHistory) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
         this.listCustomers = listCustomers;
@@ -85,6 +90,7 @@ public class CustomerController {
         this.findByCpf = findByCpf;
         this.idempotentCreate = idempotentCreate;
         this.importCustomers = importCustomers;
+        this.customerHistory = customerHistory;
     }
 
     /** With an Idempotency-Key, a retry returns the customer created the first time. */
@@ -152,6 +158,15 @@ public class CustomerController {
     @GetMapping("/{id}")
     public ResponseEntity<CustomerResponse> get(@PathVariable UUID id) {
         return withETag(ResponseEntity.ok(), getCustomer.execute(id));
+    }
+
+    /** Newest first; still available after the customer is deleted. */
+    @GetMapping("/{id}/history")
+    public PageResponse<CustomerChangeResponse> history(@PathVariable UUID id,
+                                                        @RequestParam(defaultValue = "0") int page,
+                                                        @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.from(customerHistory.execute(new CustomerHistoryQuery(id, page, size))
+                .map(CustomerChangeResponse::from));
     }
 
     @PutMapping("/{id}/address")

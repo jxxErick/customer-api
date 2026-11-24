@@ -61,6 +61,7 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `GET` | `/api/customers/{id}` | Busca cliente (devolve `ETag`) |
 | `PUT` | `/api/customers/{id}/address` | Troca o endereço (aceita `If-Match`) |
 | `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente (aceita `If-Match`) |
+| `GET` | `/api/customers/{id}/history?page=0&size=20` | Histórico de alterações (mais recente primeiro) |
 | `DELETE` | `/api/customers/{id}` | Remove cliente |
 
 A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
@@ -169,6 +170,32 @@ ficam em `CustomerStats`, no domínio.
     { "state": "SP", "customers": 5, "percentage": 55.6,
       "cities": [ { "city": "São Paulo", "customers": 4 }, { "city": "Campinas", "customers": 1 } ] }
   ]
+}
+```
+
+### Histórico de alterações
+
+Toda mudança num cliente vira uma entrada de auditoria (`CustomerChange`): `CREATED`, `RENAMED`,
+`ADDRESS_CHANGED` e `DELETED`, cada uma com os campos que mudaram (`from` → `to`). O endereço
+entra como uma linha só (`Praça da Sé, 100 - Apto 12, Sé, São Paulo/SP, 01001-000`) e o CPF nunca
+aparece no histórico.
+
+- Os casos de uso gravam pela porta `CustomerHistory`; o adaptador JPA guarda os campos numa
+  `@ElementCollection` ordenada.
+- Renomear para o mesmo nome ou "mudar" para o mesmo endereço não gera entrada.
+- A tabela não tem chave estrangeira para `customers` de propósito: o histórico **sobrevive à
+  exclusão**, então `GET /api/customers/{id}/history` continua respondendo depois do `DELETE`.
+  Um id que nunca existiu devolve 404.
+
+```json
+{
+  "items": [
+    { "type": "RENAMED", "occurredAt": "2026-11-23T14:02:11Z",
+      "changes": [ { "field": "name", "from": "Maria Silva", "to": "Maria Souza" } ] },
+    { "type": "CREATED", "occurredAt": "2026-11-23T13:58:40Z",
+      "changes": [ { "field": "name", "from": null, "to": "Maria Silva" }, "..." ] }
+  ],
+  "page": 0, "size": 20, "totalItems": 2, "totalPages": 1
 }
 ```
 

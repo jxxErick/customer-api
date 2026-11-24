@@ -8,13 +8,17 @@ import com.jxxerick.customerapi.domain.model.PostalAddress;
 import com.jxxerick.customerapi.domain.model.ZipCode;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
+import com.jxxerick.customerapi.domain.model.ChangeType;
 import com.jxxerick.customerapi.support.Fixtures;
+import com.jxxerick.customerapi.support.RecordingHistory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,12 +38,15 @@ class ChangeCustomerAddressUseCaseTest {
     @Mock
     private AddressProvider addressProvider;
 
+    private final RecordingHistory history = new RecordingHistory();
+
     private ChangeCustomerAddressUseCase useCase;
 
     @BeforeEach
     void setUp() {
         useCase = new ChangeCustomerAddressUseCase(
-                new GetCustomerUseCase(customerRepository), customerRepository, new AddressResolver(addressProvider));
+                new GetCustomerUseCase(customerRepository), customerRepository, new AddressResolver(addressProvider),
+                history, Clock.fixed(Fixtures.NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -55,6 +62,11 @@ class ChangeCustomerAddressUseCaseTest {
 
         assertThat(updated.getAddress().postal()).isEqualTo(rio);
         assertThat(updated.getAddress().number()).isEqualTo("5");
+        assertThat(history.recorded()).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.ADDRESS_CHANGED);
+            assertThat(change.fields().getFirst().previous()).isEqualTo("Praça da Sé, 100 - Apto 12, Sé, São Paulo/SP, 01001-000");
+            assertThat(change.fields().getFirst().current()).isEqualTo("Rua da Assembleia, 5, Centro, Rio de Janeiro/RJ, 20040-020");
+        });
     }
 
     @Test

@@ -6,7 +6,9 @@ import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.model.Address;
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.CustomerChange;
 import com.jxxerick.customerapi.domain.model.Email;
+import com.jxxerick.customerapi.domain.port.CustomerHistory;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
 
 import java.time.Clock;
@@ -15,11 +17,14 @@ public class CreateCustomerUseCase {
 
     private final CustomerRepository customerRepository;
     private final AddressResolver addressResolver;
+    private final CustomerHistory history;
     private final Clock clock;
 
-    public CreateCustomerUseCase(CustomerRepository customerRepository, AddressResolver addressResolver, Clock clock) {
+    public CreateCustomerUseCase(CustomerRepository customerRepository, AddressResolver addressResolver,
+                                 CustomerHistory history, Clock clock) {
         this.customerRepository = customerRepository;
         this.addressResolver = addressResolver;
+        this.history = history;
         this.clock = clock;
     }
 
@@ -35,6 +40,8 @@ public class CreateCustomerUseCase {
         }
         Address address = addressResolver.resolve(command.zipCode(), command.number(), command.complement());
         Customer customer = Customer.create(command.name(), email, cpf, address, clock.instant());
-        return customerRepository.save(customer);
+        Customer saved = customerRepository.save(customer);
+        history.record(CustomerChange.created(saved, saved.getCreatedAt()));
+        return saved;
     }
 }
