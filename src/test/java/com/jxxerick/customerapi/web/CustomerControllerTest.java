@@ -73,6 +73,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -588,5 +589,27 @@ class CustomerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"duplicateId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void preflightShouldAllowFrontEndOriginAndExposeETag() throws Exception {
+        mockMvc.perform(options("/api/customers/{id}/name", UUID.randomUUID())
+                        .header(HttpHeaders.ORIGIN, "http://localhost:4200")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "if-match"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:4200"));
+
+        mockMvc.perform(get("/api/customers/duplicates").header(HttpHeaders.ORIGIN, "http://localhost:4200"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        org.hamcrest.Matchers.containsString("ETag")));
+    }
+
+    @Test
+    void preflightShouldRejectUnknownOrigin() throws Exception {
+        mockMvc.perform(options("/api/customers")
+                        .header(HttpHeaders.ORIGIN, "http://evil.example")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .andExpect(status().isForbidden());
     }
 }
