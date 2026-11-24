@@ -69,8 +69,14 @@ public final class CustomerCsvReader {
         if (index == null || index >= record.values().size()) {
             return null;
         }
-        String value = record.values().get(index).strip();
+        String value = unguard(record.values().get(index).strip());
         return value.isEmpty() ? null : value;
+    }
+
+    /** Undoes the apostrophe {@link CsvWriter} puts before formula-like cells. */
+    private static String unguard(String value) {
+        return value.length() > 1 && value.charAt(0) == CsvWriter.FORMULA_GUARD
+                && CsvWriter.startsLikeFormula(value.substring(1)) ? value.substring(1) : value;
     }
 
     /** "Número", " CEP " and "zipCode" all become simple lowercase keys. */
