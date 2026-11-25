@@ -1,6 +1,7 @@
 package com.jxxerick.customerapi.domain.model;
 
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
+import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -11,7 +12,7 @@ public class Customer {
 
     private final UUID id;
     private final Email email;
-    private final Cpf cpf;
+    private Cpf cpf;
     private final Instant createdAt;
     private final Long version;
     private String name;
@@ -52,6 +53,15 @@ public class Customer {
 
     public void rename(String newName) {
         this.name = Validations.requireText(newName, "Nome é obrigatório");
+    }
+
+    /** A CPF is set once and never replaced. */
+    public void assignCpf(Cpf newCpf) {
+        Validations.requireNonNull(newCpf, "CPF é obrigatório");
+        if (cpf != null) {
+            throw new DomainValidationException("Cliente já possui CPF");
+        }
+        this.cpf = newCpf;
     }
 
     public void moveTo(Address newAddress) {
