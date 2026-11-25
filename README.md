@@ -274,6 +274,15 @@ curl -X POST http://localhost:8080/api/customers \
 }
 ```
 
+## Front-end
+
+Há uma interface web em Angular que usa esta API e a [expense-split-api](https://github.com/jxxErick/expense-split-api):
+**[customer-expense-web](https://github.com/jxxErick/customer-expense-web)** (lista com busca, cadastro,
+edição com `If-Match`, histórico, duplicados e mesclagem).
+
+A API libera `http://localhost:4200` no CORS e expõe o `ETag` para o navegador; outra origem pode
+ser configurada em `CORS_ALLOWED_ORIGINS` (lista separada por vírgula).
+
 ## Como rodar
 
 ```bash
