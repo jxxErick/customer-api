@@ -11,6 +11,7 @@ import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
 import com.jxxerick.customerapi.domain.exception.ImportTooLargeException;
+import com.jxxerick.customerapi.domain.exception.TrashedCustomerNotFoundException;
 import com.jxxerick.customerapi.web.csv.InvalidCsvException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -25,17 +26,18 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_EXCEPTION = Map.of(
-            CustomerNotFoundException.class, HttpStatus.NOT_FOUND,
-            ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED,
-            EmailAlreadyInUseException.class, HttpStatus.CONFLICT,
-            CpfAlreadyInUseException.class, HttpStatus.CONFLICT,
-            CustomerMergeConflictException.class, HttpStatus.CONFLICT,
-            IdempotencyKeyReusedException.class, HttpStatus.UNPROCESSABLE_ENTITY,
-            ImportTooLargeException.class, HttpStatus.PAYLOAD_TOO_LARGE,
-            AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY,
-            DomainValidationException.class, HttpStatus.BAD_REQUEST,
-            AddressProviderUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE);
+    private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_EXCEPTION = Map.ofEntries(
+            Map.entry(CustomerNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(TrashedCustomerNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED),
+            Map.entry(EmailAlreadyInUseException.class, HttpStatus.CONFLICT),
+            Map.entry(CpfAlreadyInUseException.class, HttpStatus.CONFLICT),
+            Map.entry(CustomerMergeConflictException.class, HttpStatus.CONFLICT),
+            Map.entry(IdempotencyKeyReusedException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(ImportTooLargeException.class, HttpStatus.PAYLOAD_TOO_LARGE),
+            Map.entry(AddressNotFoundException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(DomainValidationException.class, HttpStatus.BAD_REQUEST),
+            Map.entry(AddressProviderUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE));
 
     @ExceptionHandler(DomainException.class)
     ProblemDetail handleDomain(DomainException exception) {

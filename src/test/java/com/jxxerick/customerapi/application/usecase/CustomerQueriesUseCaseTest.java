@@ -6,17 +6,12 @@ import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.PageResult;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
-import com.jxxerick.customerapi.domain.model.ChangeType;
-import com.jxxerick.customerapi.domain.model.CustomerChange;
 import com.jxxerick.customerapi.support.Fixtures;
-import com.jxxerick.customerapi.support.RecordingHistory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Clock;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,7 +19,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,9 +27,6 @@ class CustomerQueriesUseCaseTest {
 
     @Mock
     private CustomerRepository customerRepository;
-
-    private final RecordingHistory history = new RecordingHistory();
-    private final Clock clock = Clock.fixed(Fixtures.NOW, ZoneOffset.UTC);
 
     @Test
     void getShouldReturnExistingCustomer() {
@@ -87,28 +78,5 @@ class CustomerQueriesUseCaseTest {
 
         assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery(" ", 0, 0)))
                 .isEqualTo(empty);
-    }
-
-    @Test
-    void deleteShouldRemoveExistingCustomer() {
-        Customer customer = Fixtures.customer();
-        when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
-
-        new DeleteCustomerUseCase(new GetCustomerUseCase(customerRepository), customerRepository, history, clock)
-                .execute(customer.getId());
-
-        verify(customerRepository).delete(customer);
-        assertThat(history.recorded()).extracting(CustomerChange::type).containsExactly(ChangeType.DELETED);
-    }
-
-    @Test
-    void deleteShouldFailWhenCustomerDoesNotExist() {
-        UUID id = UUID.randomUUID();
-        when(customerRepository.findById(id)).thenReturn(Optional.empty());
-        DeleteCustomerUseCase useCase =
-                new DeleteCustomerUseCase(new GetCustomerUseCase(customerRepository), customerRepository, history, clock);
-
-        assertThatThrownBy(() -> useCase.execute(id)).isInstanceOf(CustomerNotFoundException.class);
-        verify(customerRepository, never()).delete(any());
     }
 }

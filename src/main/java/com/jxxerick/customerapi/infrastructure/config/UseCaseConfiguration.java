@@ -3,7 +3,6 @@ package com.jxxerick.customerapi.infrastructure.config;
 import com.jxxerick.customerapi.application.usecase.AddressResolver;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
-import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.FindDuplicateCustomersUseCase;
@@ -84,12 +83,6 @@ public class UseCaseConfiguration {
     RenameCustomerUseCase renameCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
                                                 CustomerHistory history, Clock clock) {
         return new RenameCustomerUseCase(getCustomer, repository, history, clock);
-    }
-
-    @Bean
-    DeleteCustomerUseCase deleteCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
-                                                CustomerHistory history, Clock clock) {
-        return new DeleteCustomerUseCase(getCustomer, repository, history, clock);
     }
 
     @Bean

@@ -36,6 +36,10 @@ public record CustomerChange(UUID customerId, ChangeType type, List<FieldChange>
         return new CustomerChange(customer.getId(), ChangeType.DELETED, List.of(), now);
     }
 
+    public static CustomerChange restored(Customer customer, Instant now) {
+        return new CustomerChange(customer.getId(), ChangeType.RESTORED, List.of(), now);
+    }
+
     /** Entry on the customer that absorbed a duplicate; {@code inheritedCpf} may be null. */
     public static CustomerChange merged(Customer target, Customer duplicate, Cpf inheritedCpf, Instant now) {
         List<FieldChange> fields = new ArrayList<>();
