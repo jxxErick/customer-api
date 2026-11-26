@@ -4,6 +4,7 @@ import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.PageResult;
+import com.jxxerick.customerapi.domain.model.Tag;
 import com.jxxerick.customerapi.domain.model.TrashedCustomer;
 import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +38,7 @@ class JpaCustomerTrashTest {
     void shouldKeepEveryFieldOfTheSnapshot() {
         Customer customer = Customer.restore(UUID.randomUUID(), "Maria Silva", new Email("maria@example.com"),
                 new Cpf("52998224725"), Fixtures.address(), Fixtures.NOW, 2L);
+        customer.retag(List.of(new Tag("zona-sul"), new Tag("vip")));
         trash.put(TrashedCustomer.of(customer, Fixtures.NOW.plusSeconds(10), RETENTION));
         entityManager.flush();
         entityManager.clear();
@@ -45,6 +48,7 @@ class JpaCustomerTrashTest {
         assertThat(found.customer().getName()).isEqualTo("Maria Silva");
         assertThat(found.customer().getCpf()).contains(new Cpf("52998224725"));
         assertThat(found.customer().getAddress()).isEqualTo(Fixtures.address());
+        assertThat(found.customer().getTags()).containsExactly(new Tag("vip"), new Tag("zona-sul"));
         assertThat(found.customer().getCreatedAt()).isEqualTo(Fixtures.NOW);
         assertThat(found.customer().getVersion()).isNull();
         assertThat(found.deletedAt()).isEqualTo(Fixtures.NOW.plusSeconds(10));

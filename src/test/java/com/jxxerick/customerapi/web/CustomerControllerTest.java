@@ -20,7 +20,12 @@ import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseC
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.ListTagsUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.TagCustomerUseCase;
+import com.jxxerick.customerapi.application.command.TagCustomerCommand;
+import com.jxxerick.customerapi.domain.model.Tag;
+import com.jxxerick.customerapi.domain.model.TagCount;
 import com.jxxerick.customerapi.domain.exception.AddressNotFoundException;
 import com.jxxerick.customerapi.domain.exception.AddressProviderUnavailableException;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
@@ -122,6 +127,10 @@ class CustomerControllerTest {
     private FindDuplicateCustomersUseCase findDuplicates;
     @MockBean
     private MergeCustomersUseCase mergeCustomers;
+    @MockBean
+    private TagCustomerUseCase tagCustomer;
+    @MockBean
+    private ListTagsUseCase listTags;
 
     @TestConfiguration
     static class FixedClock {
@@ -611,5 +620,59 @@ class CustomerControllerTest {
                         .header(HttpHeaders.ORIGIN, "http://evil.example")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listShouldFilterByEveryTagGiven() throws Exception {
+        when(listCustomers.execute(ListCustomersQuery.of(null, List.of("vip", "Zona Sul"), 0, 20)))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0));
+
+        mockMvc.perform(get("/api/customers").param("tag", "vip").param("tag", "Zona Sul"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
+    @Test
+    void listShouldReturn400ForInvalidTag() throws Exception {
+        mockMvc.perform(get("/api/customers").param("tag", "vip!"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Tag inválida: vip!"));
+        verifyNoInteractions(listCustomers);
+    }
+
+    @Test
+    void retagShouldReturnCustomerWithTagsAndETag() throws Exception {
+        Customer customer = Fixtures.storedCustomer(4);
+        customer.retag(List.of(new Tag("vip"), new Tag("zona-sul")));
+        when(tagCustomer.execute(new TagCustomerCommand(customer.getId(), List.of("vip", "zona-sul"), 3L)))
+                .thenReturn(customer);
+
+        mockMvc.perform(put("/api/customers/{id}/tags", customer.getId())
+                        .contentType(MediaType.APPLICATION_JSON).header(HttpHeaders.IF_MATCH, "\"3\"")
+                        .content("{\"tags\":[\"vip\",\"zona-sul\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"4\""))
+                .andExpect(jsonPath("$.tags[0]").value("vip"))
+                .andExpect(jsonPath("$.tags[1]").value("zona-sul"));
+    }
+
+    @Test
+    void retagShouldReturn400WithoutTagsField() throws Exception {
+        mockMvc.perform(put("/api/customers/{id}/tags", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.tags").value("Tags são obrigatórias"));
+        verifyNoInteractions(tagCustomer);
+    }
+
+    @Test
+    void tagsShouldListCounts() throws Exception {
+        when(listTags.execute()).thenReturn(List.of(new TagCount("vip", 3), new TagCount("zona-sul", 1)));
+
+        mockMvc.perform(get("/api/customers/tags"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tag").value("vip"))
+                .andExpect(jsonPath("$[0].customers").value(3))
+                .andExpect(jsonPath("$[1].tag").value("zona-sul"));
     }
 }

@@ -19,6 +19,7 @@ public record TrashedCustomer(Customer customer, Instant deletedAt, Instant purg
     /** The customer as a brand-new row: same id and data, version reset. */
     public Customer toRestoredCustomer() {
         return Customer.restore(customer.getId(), customer.getName(), customer.getEmail(),
-                customer.getCpf().orElse(null), customer.getAddress(), customer.getCreatedAt(), null);
+                customer.getCpf().orElse(null), customer.getAddress(), customer.getTags(), customer.getCreatedAt(),
+                null);
     }
 }

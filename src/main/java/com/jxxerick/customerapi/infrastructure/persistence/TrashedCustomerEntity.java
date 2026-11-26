@@ -7,6 +7,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /** Snapshot of a deleted customer; e-mail and CPF are not unique here, the live table owns them. */
@@ -44,6 +46,10 @@ public class TrashedCustomerEntity {
     @Column(nullable = false, length = 2)
     private String state;
 
+    // comma-separated; a tag never contains a comma
+    @Column(length = 400)
+    private String tags;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -68,6 +74,7 @@ public class TrashedCustomerEntity {
         this.neighborhood = customer.getNeighborhood();
         this.city = customer.getCity();
         this.state = customer.getState();
+        this.tags = customer.getTags().isEmpty() ? null : String.join(",", new TreeSet<>(customer.getTags()));
         this.createdAt = customer.getCreatedAt();
         this.deletedAt = deletedAt;
         this.purgeAt = purgeAt;
@@ -76,7 +83,7 @@ public class TrashedCustomerEntity {
     /** Rebuilds the live-table shape so the regular mapper can turn it into a domain customer. */
     CustomerEntity toCustomerEntity() {
         return new CustomerEntity(id, name, email, cpf, zipCode, street, number, complement, neighborhood, city,
-                state, createdAt, null);
+                state, tags == null ? Set.of() : Set.of(tags.split(",")), createdAt, null);
     }
 
     UUID getId() {

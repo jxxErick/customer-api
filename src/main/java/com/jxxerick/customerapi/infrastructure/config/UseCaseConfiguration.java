@@ -12,7 +12,9 @@ import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.ListTagsUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.TagCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerHistory;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
@@ -83,6 +85,17 @@ public class UseCaseConfiguration {
     RenameCustomerUseCase renameCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
                                                 CustomerHistory history, Clock clock) {
         return new RenameCustomerUseCase(getCustomer, repository, history, clock);
+    }
+
+    @Bean
+    TagCustomerUseCase tagCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
+                                          CustomerHistory history, Clock clock) {
+        return new TagCustomerUseCase(getCustomer, repository, history, clock);
+    }
+
+    @Bean
+    ListTagsUseCase listTagsUseCase(CustomerRepository repository) {
+        return new ListTagsUseCase(repository);
     }
 
     @Bean

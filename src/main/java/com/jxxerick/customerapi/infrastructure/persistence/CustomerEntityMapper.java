@@ -5,7 +5,10 @@ import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.PostalAddress;
+import com.jxxerick.customerapi.domain.model.Tag;
 import com.jxxerick.customerapi.domain.model.ZipCode;
+
+import java.util.stream.Collectors;
 
 final class CustomerEntityMapper {
 
@@ -27,6 +30,7 @@ final class CustomerEntityMapper {
                 postal.neighborhood(),
                 postal.city(),
                 postal.state(),
+                customer.getTags().stream().map(Tag::value).collect(Collectors.toSet()),
                 customer.getCreatedAt(),
                 customer.getVersion());
     }
@@ -41,7 +45,7 @@ final class CustomerEntityMapper {
         Address address = new Address(postal, entity.getNumber(), entity.getComplement());
         return Customer.restore(
                 entity.getId(), entity.getName(), new Email(entity.getEmail()),
-                entity.getCpf() == null ? null : new Cpf(entity.getCpf()), address, entity.getCreatedAt(),
-                entity.getVersion());
+                entity.getCpf() == null ? null : new Cpf(entity.getCpf()), address,
+                entity.getTags().stream().map(Tag::new).toList(), entity.getCreatedAt(), entity.getVersion());
     }
 }

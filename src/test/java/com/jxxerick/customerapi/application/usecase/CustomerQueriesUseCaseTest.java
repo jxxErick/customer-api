@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,7 +66,7 @@ class CustomerQueriesUseCaseTest {
     @Test
     void listShouldSearchWithNormalizedQuery() {
         PageResult<Customer> page = new PageResult<>(List.of(Fixtures.customer()), 0, 100, 1);
-        when(customerRepository.search("maria", 0, 100)).thenReturn(page);
+        when(customerRepository.search("maria", Set.of(), 0, 100)).thenReturn(page);
 
         assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery("  maria ", -3, 500)))
                 .isEqualTo(page);
@@ -74,7 +75,7 @@ class CustomerQueriesUseCaseTest {
     @Test
     void listShouldTreatBlankNameAsNoFilter() {
         PageResult<Customer> empty = new PageResult<>(List.of(), 0, 1, 0);
-        when(customerRepository.search(null, 0, 1)).thenReturn(empty);
+        when(customerRepository.search(null, Set.of(), 0, 1)).thenReturn(empty);
 
         assertThat(new ListCustomersUseCase(customerRepository).execute(new ListCustomersQuery(" ", 0, 0)))
                 .isEqualTo(empty);

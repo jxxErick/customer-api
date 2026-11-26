@@ -2,8 +2,10 @@ package com.jxxerick.customerapi.domain.model;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Audit entry of something that happened to a customer; kept even after deletion. */
 public record CustomerChange(UUID customerId, ChangeType type, List<FieldChange> fields, Instant occurredAt) {
@@ -30,6 +32,16 @@ public record CustomerChange(UUID customerId, ChangeType type, List<FieldChange>
     public static CustomerChange moved(Customer customer, Address previousAddress, Instant now) {
         return new CustomerChange(customer.getId(), ChangeType.ADDRESS_CHANGED,
                 List.of(new FieldChange("address", previousAddress.summary(), customer.getAddress().summary())), now);
+    }
+
+    /** Tags go in one field, comma-separated and sorted; an empty set reads as null. */
+    public static CustomerChange retagged(Customer customer, Collection<Tag> previousTags, Instant now) {
+        return new CustomerChange(customer.getId(), ChangeType.TAGS_CHANGED,
+                List.of(new FieldChange("tags", joined(previousTags), joined(customer.getTags()))), now);
+    }
+
+    private static String joined(Collection<Tag> tags) {
+        return tags.isEmpty() ? null : tags.stream().sorted().map(Tag::value).collect(Collectors.joining(", "));
     }
 
     public static CustomerChange deleted(Customer customer, Instant now) {
