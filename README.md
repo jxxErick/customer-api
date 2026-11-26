@@ -15,8 +15,8 @@ Projeto de estudo focado em **Clean Architecture**, **SOLID**, **design patterns
 
 ```
 domain/          regras de negócio puras (sem Spring)
-  model/         Customer, Email, Cpf, ZipCode, Address, PostalAddress, IdempotencyKey
-  port/          CustomerRepository, AddressProvider, IdempotencyStore (interfaces)
+  model/         Customer, Email, Cpf, ZipCode, Address, PostalAddress, IdempotencyKey, TrashedCustomer
+  port/          CustomerRepository, AddressProvider, IdempotencyStore, CustomerTrash (interfaces)
   exception/     exceções de domínio
 application/     casos de uso (sem Spring) + commands
 infrastructure/  adapters: JPA, ViaCEP, cache, limpeza agendada, wiring dos beans
@@ -65,7 +65,10 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente (aceita `If-Match`) |
 | `GET` | `/api/customers/{id}/history?page=0&size=20` | Histórico de alterações (mais recente primeiro) |
 | `POST` | `/api/customers/{id}/merge` | Junta um duplicado neste cliente (aceita `If-Match`) |
-| `DELETE` | `/api/customers/{id}` | Remove cliente |
+| `DELETE` | `/api/customers/{id}` | Remove cliente (vai para a lixeira) |
+| `GET` | `/api/customers/trash?page=0&size=20` | Lixeira: clientes excluídos, com data do expurgo |
+| `POST` | `/api/customers/trash/{id}/restore` | Restaura o cliente com o mesmo id |
+| `DELETE` | `/api/customers/trash/{id}` | Apaga da lixeira para sempre |
 
 A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
 em 0 e `size` vai de 1 a 100. A resposta traz `items`, `page`, `size`, `totalItems` e `totalPages`.
@@ -73,8 +76,8 @@ A paginação fica atrás da porta `CustomerRepository` (`PageResult` do domíni
 não conhece o `Pageable` do Spring.
 
 Erros seguem o padrão **RFC 7807** (`application/problem+json`):
-`400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente inexistente ·
-`409` e-mail ou CPF duplicado, ou merge de CPFs diferentes · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
+`400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente inexistente (ou fora da lixeira) ·
+`409` e-mail ou CPF duplicado (também ao restaurar), ou merge de CPFs diferentes · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
 `422` CEP não encontrado ou `Idempotency-Key` reaproveitada · `503` ViaCEP fora do ar.
 
 ### Concorrência otimista (ETag / If-Match)
@@ -193,7 +196,7 @@ ficam em `CustomerStats`, no domínio.
 ### Histórico de alterações
 
 Toda mudança num cliente vira uma entrada de auditoria (`CustomerChange`): `CREATED`, `RENAMED`,
-`ADDRESS_CHANGED`, `DELETED`, `MERGED` e `MERGED_INTO`, cada uma com os campos que mudaram (`from` → `to`). O endereço
+`ADDRESS_CHANGED`, `DELETED`, `RESTORED`, `MERGED` e `MERGED_INTO`, cada uma com os campos que mudaram (`from` → `to`). O endereço
 entra como uma linha só (`Praça da Sé, 100 - Apto 12, Sé, São Paulo/SP, 01001-000`) e o CPF nunca
 aparece no histórico (só mascarado, quando um merge herda o CPF).
 
@@ -246,6 +249,33 @@ duplicados, do mais parecido para o menos:
 - aceita `If-Match` com a versão do alvo e devolve o alvo com o `ETag` novo;
 - o histórico ganha `MERGED` no alvo (`mergedFrom` e o CPF herdado, mascarado) e `MERGED_INTO` no
   duplicado, que continua consultável depois de apagado.
+
+### Lixeira
+
+Excluir sem querer não é mais definitivo. O `DELETE /api/customers/{id}` tira o cliente da tabela
+`customers` e guarda uma cópia na lixeira (`customer_trash`) por **30 dias** (`trash.retention`):
+
+- `GET /api/customers/trash` lista os excluídos (o último primeiro) com `deletedAt` e `purgeAt`;
+- `POST /api/customers/trash/{id}/restore` devolve o cliente com **o mesmo id**, os mesmos dados e
+  a data de cadastro original; a versão recomeça (`ETag: "0"`) e o histórico ganha `RESTORED`;
+- se alguém cadastrou o mesmo e-mail ou CPF enquanto ele estava na lixeira, a restauração dá `409`
+  e o cliente continua lá, em vez de virar um duplicado;
+- `DELETE /api/customers/trash/{id}` apaga para sempre na hora; o histórico continua consultável;
+- um job `@Scheduled` (`TrashPurgeJob`, a cada hora) expurga o que passou do `purgeAt`. A data do
+  expurgo é gravada na exclusão, então mudar a retenção vale só para as próximas;
+- a lixeira é uma tabela à parte, e não um `deleted = true` na `customers`, para que listagem,
+  busca, exportação e as constraints únicas de e-mail e CPF continuem enxergando só clientes ativos;
+- o duplicado apagado por um merge **não** vai para a lixeira: ele já foi absorvido pelo outro cliente.
+
+```json
+{
+  "items": [
+    { "customer": { "id": "6f1c...", "name": "Maria Silva", "cpf": "***.982.247-**", "...": "..." },
+      "deletedAt": "2026-11-26T14:02:11Z", "purgeAt": "2026-12-26T14:02:11Z" }
+  ],
+  "page": 0, "size": 20, "totalItems": 1, "totalPages": 1
+}
+```
 
 ### Exemplo
 
