@@ -3,10 +3,10 @@ package com.jxxerick.customerapi.infrastructure.persistence;
 import com.jxxerick.customerapi.domain.exception.ConcurrentUpdateException;
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.CustomerFilter;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.LocationCount;
 import com.jxxerick.customerapi.domain.model.PageResult;
-import com.jxxerick.customerapi.domain.model.Tag;
 import com.jxxerick.customerapi.domain.model.TagCount;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -17,9 +17,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /** Adapter from Spring Data JPA to the {@link CustomerRepository} port. */
 @Repository
@@ -46,14 +44,16 @@ class JpaCustomerRepository implements CustomerRepository {
     }
 
     @Override
-    public PageResult<Customer> search(String nameFragment, Set<Tag> tags, int page, int size) {
+    public PageResult<Customer> findMatching(CustomerFilter filter, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("name", "id"));
-        Set<String> tagValues = tags.stream().map(Tag::value).collect(Collectors.toSet());
-        Page<CustomerEntity> result = jpa.findAll(
-                CustomerSpecifications.nameContains(nameFragment).and(CustomerSpecifications.hasAllTags(tagValues)),
-                pageable);
+        Page<CustomerEntity> result = jpa.findAll(CustomerSpecifications.matching(filter), pageable);
         return new PageResult<>(result.map(CustomerEntityMapper::toDomain).getContent(), page, size,
                 result.getTotalElements());
+    }
+
+    @Override
+    public long countMatching(CustomerFilter filter) {
+        return jpa.count(CustomerSpecifications.matching(filter));
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.jxxerick.customerapi.domain.port;
 
 import com.jxxerick.customerapi.domain.model.Cpf;
 import com.jxxerick.customerapi.domain.model.Customer;
+import com.jxxerick.customerapi.domain.model.CustomerFilter;
 import com.jxxerick.customerapi.domain.model.Email;
 import com.jxxerick.customerapi.domain.model.LocationCount;
 import com.jxxerick.customerapi.domain.model.PageResult;
@@ -19,11 +20,18 @@ public interface CustomerRepository {
 
     Optional<Customer> findById(UUID id);
 
+    /** Customers matching every criterion of {@code filter}, ordered by name. */
+    PageResult<Customer> findMatching(CustomerFilter filter, int page, int size);
+
+    long countMatching(CustomerFilter filter);
+
     /**
-     * Customers ordered by name; a null {@code nameFragment} matches everyone and every tag in
-     * {@code tags} must be present on the customer (an empty set does not filter).
+     * A null {@code nameFragment} matches everyone and every tag in {@code tags} must be present on the
+     * customer (an empty set does not filter).
      */
-    PageResult<Customer> search(String nameFragment, Set<Tag> tags, int page, int size);
+    default PageResult<Customer> search(String nameFragment, Set<Tag> tags, int page, int size) {
+        return findMatching(new CustomerFilter(nameFragment, tags, null, null), page, size);
+    }
 
     default PageResult<Customer> search(String nameFragment, int page, int size) {
         return search(nameFragment, Set.of(), page, size);

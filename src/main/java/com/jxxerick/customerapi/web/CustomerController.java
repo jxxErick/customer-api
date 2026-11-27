@@ -172,13 +172,15 @@ public class CustomerController {
         return ImportReportResponse.from(importCustomers.execute(rows));
     }
 
-    /** Repeat {@code tag} to require several: {@code ?tag=vip&tag=zona-sul}. */
+    /** Repeat {@code tag} to require several: {@code ?tag=vip&tag=zona-sul}; every filter is combined with AND. */
     @GetMapping
     public PageResponse<CustomerResponse> list(@RequestParam(required = false) String name,
                                                @RequestParam(name = "tag", required = false) List<String> tags,
+                                               @RequestParam(required = false) String state,
+                                               @RequestParam(required = false) String city,
                                                @RequestParam(defaultValue = "0") int page,
                                                @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.from(listCustomers.execute(ListCustomersQuery.of(name, tags, page, size))
+        return PageResponse.from(listCustomers.execute(ListCustomersQuery.of(name, tags, state, city, page, size))
                 .map(CustomerResponse::from));
     }
 
