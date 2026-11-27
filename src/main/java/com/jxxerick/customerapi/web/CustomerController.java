@@ -16,7 +16,9 @@ import com.jxxerick.customerapi.application.usecase.IdempotentCreateCustomerUseC
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.ListTagsUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.TagCustomerUseCase;
 import com.jxxerick.customerapi.domain.model.Customer;
 import com.jxxerick.customerapi.web.csv.CsvWriter;
 import com.jxxerick.customerapi.web.csv.CustomerCsvReader;
@@ -32,6 +34,8 @@ import com.jxxerick.customerapi.web.dto.ImportReportResponse;
 import com.jxxerick.customerapi.web.dto.MergeCustomersRequest;
 import com.jxxerick.customerapi.web.dto.PageResponse;
 import com.jxxerick.customerapi.web.dto.RenameCustomerRequest;
+import com.jxxerick.customerapi.web.dto.TagCountResponse;
+import com.jxxerick.customerapi.web.dto.TagCustomerRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -85,6 +89,8 @@ public class CustomerController {
     private final ExportCustomersUseCase exportCustomers;
     private final FindDuplicateCustomersUseCase findDuplicates;
     private final MergeCustomersUseCase mergeCustomers;
+    private final TagCustomerUseCase tagCustomer;
+    private final ListTagsUseCase listTags;
     private final Clock clock;
 
     public CustomerController(CreateCustomerUseCase createCustomer,
@@ -101,6 +107,8 @@ public class CustomerController {
                               ExportCustomersUseCase exportCustomers,
                               FindDuplicateCustomersUseCase findDuplicates,
                               MergeCustomersUseCase mergeCustomers,
+                              TagCustomerUseCase tagCustomer,
+                              ListTagsUseCase listTags,
                               Clock clock) {
         this.createCustomer = createCustomer;
         this.getCustomer = getCustomer;
@@ -116,6 +124,8 @@ public class CustomerController {
         this.exportCustomers = exportCustomers;
         this.findDuplicates = findDuplicates;
         this.mergeCustomers = mergeCustomers;
+        this.tagCustomer = tagCustomer;
+        this.listTags = listTags;
         this.clock = clock;
     }
 
@@ -162,11 +172,13 @@ public class CustomerController {
         return ImportReportResponse.from(importCustomers.execute(rows));
     }
 
+    /** Repeat {@code tag} to require several: {@code ?tag=vip&tag=zona-sul}. */
     @GetMapping
     public PageResponse<CustomerResponse> list(@RequestParam(required = false) String name,
+                                               @RequestParam(name = "tag", required = false) List<String> tags,
                                                @RequestParam(defaultValue = "0") int page,
                                                @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.from(listCustomers.execute(new ListCustomersQuery(name, page, size))
+        return PageResponse.from(listCustomers.execute(ListCustomersQuery.of(name, tags, page, size))
                 .map(CustomerResponse::from));
     }
 
@@ -190,6 +202,12 @@ public class CustomerController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(filename).build().toString())
                 .body(body);
+    }
+
+    /** Tags in use, most common first. */
+    @GetMapping("/tags")
+    public List<TagCountResponse> tags() {
+        return listTags.execute().stream().map(TagCountResponse::from).toList();
     }
 
     @GetMapping("/stats")
@@ -249,6 +267,16 @@ public class CustomerController {
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
             @Valid @RequestBody RenameCustomerRequest request) {
         Customer customer = renameCustomer.execute(request.toCommand(id, ETags.parseIfMatch(ifMatch)));
+        return withETag(ResponseEntity.ok(), customer);
+    }
+
+    /** Replaces every tag of the customer. */
+    @PutMapping("/{id}/tags")
+    public ResponseEntity<CustomerResponse> retag(
+            @PathVariable UUID id,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @Valid @RequestBody TagCustomerRequest request) {
+        Customer customer = tagCustomer.execute(request.toCommand(id, ETags.parseIfMatch(ifMatch)));
         return withETag(ResponseEntity.ok(), customer);
     }
 

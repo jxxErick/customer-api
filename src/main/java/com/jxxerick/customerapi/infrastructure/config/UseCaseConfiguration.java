@@ -3,7 +3,6 @@ package com.jxxerick.customerapi.infrastructure.config;
 import com.jxxerick.customerapi.application.usecase.AddressResolver;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
-import com.jxxerick.customerapi.application.usecase.DeleteCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.FindDuplicateCustomersUseCase;
@@ -13,7 +12,9 @@ import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.ListTagsUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.TagCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerHistory;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
@@ -87,9 +88,14 @@ public class UseCaseConfiguration {
     }
 
     @Bean
-    DeleteCustomerUseCase deleteCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
-                                                CustomerHistory history, Clock clock) {
-        return new DeleteCustomerUseCase(getCustomer, repository, history, clock);
+    TagCustomerUseCase tagCustomerUseCase(GetCustomerUseCase getCustomer, CustomerRepository repository,
+                                          CustomerHistory history, Clock clock) {
+        return new TagCustomerUseCase(getCustomer, repository, history, clock);
+    }
+
+    @Bean
+    ListTagsUseCase listTagsUseCase(CustomerRepository repository) {
+        return new ListTagsUseCase(repository);
     }
 
     @Bean

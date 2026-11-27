@@ -1,12 +1,20 @@
 package com.jxxerick.customerapi.infrastructure.persistence;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -43,6 +51,14 @@ public class CustomerEntity {
     @Column(nullable = false, length = 2)
     private String state;
 
+    // eager is fine: a customer has at most a handful of tags
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "customer_tags", joinColumns = @JoinColumn(name = "customer_id"),
+            indexes = @Index(name = "idx_customer_tags_tag", columnList = "tag"))
+    @Column(name = "tag", nullable = false, length = 30)
+    @BatchSize(size = 100)
+    private Set<String> tags = new HashSet<>();
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -54,8 +70,9 @@ public class CustomerEntity {
 
     @SuppressWarnings("java:S107")
     CustomerEntity(UUID id, String name, String email, String cpf, String zipCode, String street, String number,
-                   String complement, String neighborhood, String city, String state, Instant createdAt,
-                   Long version) {
+                   String complement, String neighborhood, String city, String state, Set<String> tags,
+                   Instant createdAt, Long version) {
+        this.tags = new HashSet<>(tags);
         this.id = id;
         this.name = name;
         this.email = email;
@@ -113,6 +130,10 @@ public class CustomerEntity {
 
     String getState() {
         return state;
+    }
+
+    Set<String> getTags() {
+        return Set.copyOf(tags);
     }
 
     Instant getCreatedAt() {

@@ -14,6 +14,6 @@ public class ListCustomersUseCase {
     }
 
     public PageResult<Customer> execute(ListCustomersQuery query) {
-        return customerRepository.search(query.name(), query.page(), query.size());
+        return customerRepository.search(query.name(), query.tags(), query.page(), query.size());
     }
 }

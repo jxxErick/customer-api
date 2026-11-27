@@ -27,3 +27,8 @@ idempotency:
 cors:
   # comma-separated; the Angular dev server by default
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+
+trash:
+  # deleted customers can be restored for this long
+  retention: 30d
+  purge-interval: PT1H
