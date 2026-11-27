@@ -63,6 +63,18 @@ public class Customer {
         this.tags = validTags(Validations.requireNonNull(newTags, "Tags são obrigatórias"));
     }
 
+    /** Adds and removes tags keeping the others; returns false when nothing changed. */
+    public boolean changeTags(Collection<Tag> toAdd, Collection<Tag> toRemove) {
+        SortedSet<Tag> updated = new TreeSet<>(tags);
+        updated.addAll(Validations.requireNonNull(toAdd, "Tags são obrigatórias"));
+        updated.removeAll(Validations.requireNonNull(toRemove, "Tags são obrigatórias"));
+        if (updated.equals(tags)) {
+            return false;
+        }
+        retag(updated);
+        return true;
+    }
+
     private static SortedSet<Tag> validTags(Collection<Tag> tags) {
         SortedSet<Tag> sorted = new TreeSet<>(tags);
         if (sorted.size() > MAX_TAGS) {

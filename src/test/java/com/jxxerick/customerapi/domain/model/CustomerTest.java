@@ -4,6 +4,7 @@ import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.support.Fixtures;
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,5 +53,17 @@ class CustomerTest {
     @Test
     void addressShouldDropBlankComplement() {
         assertThat(new Address(Fixtures.postalAddress(), "10", "  ").complement()).isNull();
+    }
+
+    @Test
+    void changeTagsShouldKeepUntouchedTagsAndReportNoOp() {
+        Customer customer = Fixtures.customer();
+        customer.retag(Set.of(new Tag("vip"), new Tag("inativo")));
+
+        assertThat(customer.changeTags(Set.of(new Tag("atacado")), Set.of(new Tag("inativo"))))
+                .isTrue();
+        assertThat(customer.getTags()).containsExactly(new Tag("atacado"), new Tag("vip"));
+        assertThat(customer.changeTags(Set.of(new Tag("vip")), Set.of(new Tag("outra"))))
+                .isFalse();
     }
 }

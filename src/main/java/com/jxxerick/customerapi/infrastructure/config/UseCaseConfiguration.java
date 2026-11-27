@@ -1,6 +1,7 @@
 package com.jxxerick.customerapi.infrastructure.config;
 
 import com.jxxerick.customerapi.application.usecase.AddressResolver;
+import com.jxxerick.customerapi.application.usecase.BulkTagCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateSegmentUseCase;
@@ -138,6 +139,12 @@ public class UseCaseConfiguration {
     @Bean
     DeleteSegmentUseCase deleteSegmentUseCase(GetSegmentUseCase getSegment, SegmentRepository segmentRepository) {
         return new DeleteSegmentUseCase(getSegment, segmentRepository);
+    }
+
+    @Bean
+    BulkTagCustomersUseCase bulkTagCustomersUseCase(GetSegmentUseCase getSegment, CustomerRepository repository,
+                                                    CustomerHistory history, Clock clock) {
+        return new BulkTagCustomersUseCase(getSegment, repository, history, clock);
     }
 
     @Bean
