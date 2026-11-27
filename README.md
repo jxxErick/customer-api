@@ -56,7 +56,7 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `POST` | `/api/customers` | Cria cliente (endereço resolvido pelo CEP, aceita `Idempotency-Key`) |
 | `POST` | `/api/customers/lookup` | Busca cliente pelo CPF (enviado no corpo) |
 | `POST` | `/api/customers/import` | Importa clientes de um CSV (`text/csv` ou upload `file`) |
-| `GET` | `/api/customers?name=&tag=&page=0&size=20` | Lista clientes paginada, com filtro por nome e tags |
+| `GET` | `/api/customers?name=&tag=&state=&city=&page=0&size=20` | Lista clientes paginada, com filtro por nome, tags, UF e cidade |
 | `GET` | `/api/customers/export?name=` | Exporta clientes em CSV (mesmo formato da importação) |
 | `GET` | `/api/customers/stats` | Clientes por estado e cidade |
 | `GET` | `/api/customers/tags` | Tags em uso e quantos clientes têm cada uma |
@@ -71,6 +71,10 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `GET` | `/api/customers/trash?page=0&size=20` | Lixeira: clientes excluídos, com data do expurgo |
 | `POST` | `/api/customers/trash/{id}/restore` | Restaura o cliente com o mesmo id |
 | `DELETE` | `/api/customers/trash/{id}` | Apaga da lixeira para sempre |
+| `POST` | `/api/segments` | Salva um segmento (filtro com nome) |
+| `GET` | `/api/segments` | Segmentos com a contagem atual de clientes |
+| `GET` | `/api/segments/{id}/customers?page=0&size=20` | Clientes do segmento |
+| `DELETE` | `/api/segments/{id}` | Apaga o segmento (os clientes ficam) |
 
 A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
 em 0 e `size` vai de 1 a 100. A resposta traz `items`, `page`, `size`, `totalItems` e `totalPages`.
@@ -78,8 +82,8 @@ A paginação fica atrás da porta `CustomerRepository` (`PageResult` do domíni
 não conhece o `Pageable` do Spring.
 
 Erros seguem o padrão **RFC 7807** (`application/problem+json`):
-`400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente inexistente (ou fora da lixeira) ·
-`409` e-mail ou CPF duplicado (também ao restaurar), ou merge de CPFs diferentes · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
+`400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente ou segmento inexistente (ou fora da lixeira) ·
+`409` e-mail ou CPF duplicado (também ao restaurar), merge de CPFs diferentes ou nome de segmento repetido · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
 `422` CEP não encontrado ou `Idempotency-Key` reaproveitada · `503` ViaCEP fora do ar.
 
 ### Concorrência otimista (ETag / If-Match)
@@ -299,6 +303,36 @@ Excluir sem querer não é mais definitivo. O `DELETE /api/customers/{id}` tira 
   ],
   "page": 0, "size": 20, "totalItems": 1, "totalPages": 1
 }
+```
+
+### Segmentos
+
+Um segmento é um **filtro salvo com nome** ("VIPs de SP", "Atacado no Rio"). Ele guarda os
+critérios, não os clientes, então está sempre atualizado com a base:
+
+```bash
+curl -X POST http://localhost:8080/api/segments -H "Content-Type: application/json" \
+  -d '{"name":"VIPs SP","tags":["VIP"],"state":"sp"}'
+```
+
+- critérios: `nameContains`, `tags` (todas), `state` (UF) e `city` (igual, sem diferenciar
+  maiúsculas), combinados com **E**. Os mesmos filtros valem na listagem:
+  `GET /api/customers?state=SP&city=Campinas&tag=vip`;
+- os critérios passam pelas mesmas regras do resto da API: tags normalizadas (`VIP` vira `vip`) e UF
+  com duas letras (`sp` vira `SP`, `São Paulo` é `400`). Segmento sem nenhum critério também é `400`
+  (para "todos" já existe a listagem);
+- nome único sem diferenciar maiúsculas: `VIPs SP` e `vips sp` não convivem (`409`);
+- `GET /api/segments` lista por nome com a contagem **ao vivo** de cada um (`customers`), e
+  `GET /api/segments/{id}/customers` pagina os clientes do segmento com as mesmas regras da listagem;
+- por dentro, `CustomerFilter` é um value object do domínio, compartilhado entre a listagem e os
+  segmentos, e vira uma `Specification` só no adaptador JPA; a porta ganhou `findMatching` e
+  `countMatching`;
+- apagar o segmento (`DELETE /api/segments/{id}`) não mexe em cliente nenhum.
+
+```json
+{ "id": "3b0e...", "name": "VIPs SP",
+  "criteria": { "nameContains": null, "tags": ["vip"], "state": "SP", "city": null },
+  "customers": 12, "createdAt": "2026-11-27T20:10:00Z" }
 ```
 
 ### Exemplo
