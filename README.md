@@ -65,6 +65,7 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `PUT` | `/api/customers/{id}/address` | Troca o endereço (aceita `If-Match`) |
 | `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente (aceita `If-Match`) |
 | `PUT` | `/api/customers/{id}/tags` | Troca as tags do cliente (aceita `If-Match`) |
+| `POST` | `/api/customers/tags/bulk` | Adiciona/remove tags de vários clientes (ids ou segmento) |
 | `GET` | `/api/customers/{id}/history?page=0&size=20` | Histórico de alterações (mais recente primeiro) |
 | `POST` | `/api/customers/{id}/merge` | Junta um duplicado neste cliente (aceita `If-Match`) |
 | `DELETE` | `/api/customers/{id}` | Remove cliente (vai para a lixeira) |
@@ -333,6 +334,41 @@ curl -X POST http://localhost:8080/api/segments -H "Content-Type: application/js
 { "id": "3b0e...", "name": "VIPs SP",
   "criteria": { "nameContains": null, "tags": ["vip"], "state": "SP", "city": null },
   "customers": 12, "createdAt": "2026-11-27T20:10:00Z" }
+```
+
+### Tags em lote
+
+`POST /api/customers/tags/bulk` adiciona e remove tags de vários clientes de uma vez, **sem mexer nas
+outras tags** de cada um (diferente do `PUT /{id}/tags`, que troca o conjunto inteiro). O alvo é uma
+lista de ids **ou** um segmento:
+
+```bash
+# marca uma lista de clientes
+curl -X POST http://localhost:8080/api/customers/tags/bulk -H "Content-Type: application/json" \
+  -d '{"customerIds":["6f1c...","9a2d..."],"add":["Black Friday"]}'
+
+# tira a tag "inativo" de todo mundo do segmento
+curl -X POST http://localhost:8080/api/customers/tags/bulk -H "Content-Type: application/json" \
+  -d '{"segmentId":"3b0e...","remove":["inativo"]}'
+```
+
+- cada cliente é salvo sozinho, como na importação: um problema num não trava os outros. A resposta
+  é sempre `200`, com uma linha por cliente: `UPDATED`, `UNCHANGED` (já estava assim, sem entrada no
+  histórico), `NOT_FOUND`, `REJECTED` (passaria de 10 tags) ou `CONFLICT` (alterado ao mesmo tempo
+  por outra requisição), mais os totais `updated`, `unchanged` e `failed`;
+- quem muda ganha `TAGS_CHANGED` no histórico, igual à troca individual;
+- os ids do segmento são **coletados antes** de qualquer alteração: tirar a tag `inativo` de quem
+  está no segmento "Inativos" tira as pessoas do próprio filtro, e paginar enquanto altera pularia
+  metade delas;
+- o que invalida o pedido inteiro é `400` antes de tocar em qualquer cliente: nenhuma tag informada,
+  a mesma tag em `add` e `remove`, tag inválida, ids **e** segmento juntos (ou nenhum dos dois) ou
+  mais de **1000** clientes. Ids repetidos contam uma vez só. Segmento inexistente é `404`.
+
+```json
+{ "total": 3, "updated": 1, "unchanged": 1, "failed": 1,
+  "items": [ { "customerId": "6f1c...", "outcome": "UPDATED", "message": null },
+             { "customerId": "9a2d...", "outcome": "UNCHANGED", "message": null },
+             { "customerId": "c4e7...", "outcome": "REJECTED", "message": "Um cliente pode ter no máximo 10 tags" } ] }
 ```
 
 ### Exemplo
