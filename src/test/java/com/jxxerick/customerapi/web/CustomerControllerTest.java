@@ -210,7 +210,7 @@ class CustomerControllerTest {
 
     @Test
     void listShouldReturnCustomers() throws Exception {
-        when(listCustomers.execute(new ListCustomersQuery(null, 0, 20)))
+        when(listCustomers.execute(ListCustomersQuery.of(null, null, 0, 20)))
                 .thenReturn(new PageResult<>(List.of(Fixtures.customer()), 0, 20, 1));
 
         mockMvc.perform(get("/api/customers"))
@@ -630,6 +630,24 @@ class CustomerControllerTest {
         mockMvc.perform(get("/api/customers").param("tag", "vip").param("tag", "Zona Sul"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
+    @Test
+    void listShouldFilterByStateAndCity() throws Exception {
+        when(listCustomers.execute(ListCustomersQuery.of(null, null, "sp", "Campinas", 0, 20)))
+                .thenReturn(new PageResult<>(List.of(Fixtures.customer()), 0, 20, 1));
+
+        mockMvc.perform(get("/api/customers").param("state", "sp").param("city", "Campinas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1));
+    }
+
+    @Test
+    void listShouldReturn400ForInvalidState() throws Exception {
+        mockMvc.perform(get("/api/customers").param("state", "São Paulo"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("UF inválida: SÃO PAULO"));
+        verifyNoInteractions(listCustomers);
     }
 
     @Test

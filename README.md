@@ -56,7 +56,7 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `POST` | `/api/customers` | Cria cliente (endereço resolvido pelo CEP, aceita `Idempotency-Key`) |
 | `POST` | `/api/customers/lookup` | Busca cliente pelo CPF (enviado no corpo) |
 | `POST` | `/api/customers/import` | Importa clientes de um CSV (`text/csv` ou upload `file`) |
-| `GET` | `/api/customers?name=&tag=&page=0&size=20` | Lista clientes paginada, com filtro por nome e tags |
+| `GET` | `/api/customers?name=&tag=&state=&city=&page=0&size=20` | Lista clientes paginada, com filtro por nome, tags, UF e cidade |
 | `GET` | `/api/customers/export?name=` | Exporta clientes em CSV (mesmo formato da importação) |
 | `GET` | `/api/customers/stats` | Clientes por estado e cidade |
 | `GET` | `/api/customers/tags` | Tags em uso e quantos clientes têm cada uma |
@@ -65,12 +65,17 @@ O domínio e os casos de uso não dependem de framework; o Spring só aparece na
 | `PUT` | `/api/customers/{id}/address` | Troca o endereço (aceita `If-Match`) |
 | `PATCH` | `/api/customers/{id}/name` | Renomeia o cliente (aceita `If-Match`) |
 | `PUT` | `/api/customers/{id}/tags` | Troca as tags do cliente (aceita `If-Match`) |
+| `POST` | `/api/customers/tags/bulk` | Adiciona/remove tags de vários clientes (ids ou segmento) |
 | `GET` | `/api/customers/{id}/history?page=0&size=20` | Histórico de alterações (mais recente primeiro) |
 | `POST` | `/api/customers/{id}/merge` | Junta um duplicado neste cliente (aceita `If-Match`) |
 | `DELETE` | `/api/customers/{id}` | Remove cliente (vai para a lixeira) |
 | `GET` | `/api/customers/trash?page=0&size=20` | Lixeira: clientes excluídos, com data do expurgo |
 | `POST` | `/api/customers/trash/{id}/restore` | Restaura o cliente com o mesmo id |
 | `DELETE` | `/api/customers/trash/{id}` | Apaga da lixeira para sempre |
+| `POST` | `/api/segments` | Salva um segmento (filtro com nome) |
+| `GET` | `/api/segments` | Segmentos com a contagem atual de clientes |
+| `GET` | `/api/segments/{id}/customers?page=0&size=20` | Clientes do segmento |
+| `DELETE` | `/api/segments/{id}` | Apaga o segmento (os clientes ficam) |
 
 A listagem é ordenada por nome; `name` busca por trecho sem diferenciar maiúsculas, `page` começa
 em 0 e `size` vai de 1 a 100. A resposta traz `items`, `page`, `size`, `totalItems` e `totalPages`.
@@ -78,8 +83,8 @@ A paginação fica atrás da porta `CustomerRepository` (`PageResult` do domíni
 não conhece o `Pageable` do Spring.
 
 Erros seguem o padrão **RFC 7807** (`application/problem+json`):
-`400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente inexistente (ou fora da lixeira) ·
-`409` e-mail ou CPF duplicado (também ao restaurar), ou merge de CPFs diferentes · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
+`400` validação, CPF inválido, CSV ilegível ou cabeçalho malformado · `404` cliente ou segmento inexistente (ou fora da lixeira) ·
+`409` e-mail ou CPF duplicado (também ao restaurar), merge de CPFs diferentes ou nome de segmento repetido · `412` versão desatualizada · `413` CSV com mais de 1000 clientes ·
 `422` CEP não encontrado ou `Idempotency-Key` reaproveitada · `503` ViaCEP fora do ar.
 
 ### Concorrência otimista (ETag / If-Match)
@@ -299,6 +304,71 @@ Excluir sem querer não é mais definitivo. O `DELETE /api/customers/{id}` tira 
   ],
   "page": 0, "size": 20, "totalItems": 1, "totalPages": 1
 }
+```
+
+### Segmentos
+
+Um segmento é um **filtro salvo com nome** ("VIPs de SP", "Atacado no Rio"). Ele guarda os
+critérios, não os clientes, então está sempre atualizado com a base:
+
+```bash
+curl -X POST http://localhost:8080/api/segments -H "Content-Type: application/json" \
+  -d '{"name":"VIPs SP","tags":["VIP"],"state":"sp"}'
+```
+
+- critérios: `nameContains`, `tags` (todas), `state` (UF) e `city` (igual, sem diferenciar
+  maiúsculas), combinados com **E**. Os mesmos filtros valem na listagem:
+  `GET /api/customers?state=SP&city=Campinas&tag=vip`;
+- os critérios passam pelas mesmas regras do resto da API: tags normalizadas (`VIP` vira `vip`) e UF
+  com duas letras (`sp` vira `SP`, `São Paulo` é `400`). Segmento sem nenhum critério também é `400`
+  (para "todos" já existe a listagem);
+- nome único sem diferenciar maiúsculas: `VIPs SP` e `vips sp` não convivem (`409`);
+- `GET /api/segments` lista por nome com a contagem **ao vivo** de cada um (`customers`), e
+  `GET /api/segments/{id}/customers` pagina os clientes do segmento com as mesmas regras da listagem;
+- por dentro, `CustomerFilter` é um value object do domínio, compartilhado entre a listagem e os
+  segmentos, e vira uma `Specification` só no adaptador JPA; a porta ganhou `findMatching` e
+  `countMatching`;
+- apagar o segmento (`DELETE /api/segments/{id}`) não mexe em cliente nenhum.
+
+```json
+{ "id": "3b0e...", "name": "VIPs SP",
+  "criteria": { "nameContains": null, "tags": ["vip"], "state": "SP", "city": null },
+  "customers": 12, "createdAt": "2026-11-27T20:10:00Z" }
+```
+
+### Tags em lote
+
+`POST /api/customers/tags/bulk` adiciona e remove tags de vários clientes de uma vez, **sem mexer nas
+outras tags** de cada um (diferente do `PUT /{id}/tags`, que troca o conjunto inteiro). O alvo é uma
+lista de ids **ou** um segmento:
+
+```bash
+# marca uma lista de clientes
+curl -X POST http://localhost:8080/api/customers/tags/bulk -H "Content-Type: application/json" \
+  -d '{"customerIds":["6f1c...","9a2d..."],"add":["Black Friday"]}'
+
+# tira a tag "inativo" de todo mundo do segmento
+curl -X POST http://localhost:8080/api/customers/tags/bulk -H "Content-Type: application/json" \
+  -d '{"segmentId":"3b0e...","remove":["inativo"]}'
+```
+
+- cada cliente é salvo sozinho, como na importação: um problema num não trava os outros. A resposta
+  é sempre `200`, com uma linha por cliente: `UPDATED`, `UNCHANGED` (já estava assim, sem entrada no
+  histórico), `NOT_FOUND`, `REJECTED` (passaria de 10 tags) ou `CONFLICT` (alterado ao mesmo tempo
+  por outra requisição), mais os totais `updated`, `unchanged` e `failed`;
+- quem muda ganha `TAGS_CHANGED` no histórico, igual à troca individual;
+- os ids do segmento são **coletados antes** de qualquer alteração: tirar a tag `inativo` de quem
+  está no segmento "Inativos" tira as pessoas do próprio filtro, e paginar enquanto altera pularia
+  metade delas;
+- o que invalida o pedido inteiro é `400` antes de tocar em qualquer cliente: nenhuma tag informada,
+  a mesma tag em `add` e `remove`, tag inválida, ids **e** segmento juntos (ou nenhum dos dois) ou
+  mais de **1000** clientes. Ids repetidos contam uma vez só. Segmento inexistente é `404`.
+
+```json
+{ "total": 3, "updated": 1, "unchanged": 1, "failed": 1,
+  "items": [ { "customerId": "6f1c...", "outcome": "UPDATED", "message": null },
+             { "customerId": "9a2d...", "outcome": "UNCHANGED", "message": null },
+             { "customerId": "c4e7...", "outcome": "REJECTED", "message": "Um cliente pode ter no máximo 10 tags" } ] }
 ```
 
 ### Exemplo

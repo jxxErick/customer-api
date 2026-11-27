@@ -1,16 +1,22 @@
 package com.jxxerick.customerapi.infrastructure.config;
 
 import com.jxxerick.customerapi.application.usecase.AddressResolver;
+import com.jxxerick.customerapi.application.usecase.BulkTagCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ChangeCustomerAddressUseCase;
 import com.jxxerick.customerapi.application.usecase.CreateCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.CreateSegmentUseCase;
+import com.jxxerick.customerapi.application.usecase.DeleteSegmentUseCase;
 import com.jxxerick.customerapi.application.usecase.ExportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.FindCustomerByCpfUseCase;
 import com.jxxerick.customerapi.application.usecase.FindDuplicateCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerHistoryUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerStatsUseCase;
 import com.jxxerick.customerapi.application.usecase.GetCustomerUseCase;
+import com.jxxerick.customerapi.application.usecase.GetSegmentUseCase;
 import com.jxxerick.customerapi.application.usecase.ImportCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.ListSegmentCustomersUseCase;
+import com.jxxerick.customerapi.application.usecase.ListSegmentsUseCase;
 import com.jxxerick.customerapi.application.usecase.MergeCustomersUseCase;
 import com.jxxerick.customerapi.application.usecase.ListTagsUseCase;
 import com.jxxerick.customerapi.application.usecase.RenameCustomerUseCase;
@@ -18,6 +24,7 @@ import com.jxxerick.customerapi.application.usecase.TagCustomerUseCase;
 import com.jxxerick.customerapi.domain.port.AddressProvider;
 import com.jxxerick.customerapi.domain.port.CustomerHistory;
 import com.jxxerick.customerapi.domain.port.CustomerRepository;
+import com.jxxerick.customerapi.domain.port.SegmentRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -106,6 +113,38 @@ public class UseCaseConfiguration {
     @Bean
     FindDuplicateCustomersUseCase findDuplicateCustomersUseCase(CustomerRepository repository) {
         return new FindDuplicateCustomersUseCase(repository);
+    }
+
+    @Bean
+    GetSegmentUseCase getSegmentUseCase(SegmentRepository segmentRepository) {
+        return new GetSegmentUseCase(segmentRepository);
+    }
+
+    @Bean
+    CreateSegmentUseCase createSegmentUseCase(SegmentRepository segmentRepository, Clock clock) {
+        return new CreateSegmentUseCase(segmentRepository, clock);
+    }
+
+    @Bean
+    ListSegmentsUseCase listSegmentsUseCase(SegmentRepository segmentRepository, CustomerRepository repository) {
+        return new ListSegmentsUseCase(segmentRepository, repository);
+    }
+
+    @Bean
+    ListSegmentCustomersUseCase listSegmentCustomersUseCase(GetSegmentUseCase getSegment,
+                                                            CustomerRepository repository) {
+        return new ListSegmentCustomersUseCase(getSegment, repository);
+    }
+
+    @Bean
+    DeleteSegmentUseCase deleteSegmentUseCase(GetSegmentUseCase getSegment, SegmentRepository segmentRepository) {
+        return new DeleteSegmentUseCase(getSegment, segmentRepository);
+    }
+
+    @Bean
+    BulkTagCustomersUseCase bulkTagCustomersUseCase(GetSegmentUseCase getSegment, CustomerRepository repository,
+                                                    CustomerHistory history, Clock clock) {
+        return new BulkTagCustomersUseCase(getSegment, repository, history, clock);
     }
 
     @Bean

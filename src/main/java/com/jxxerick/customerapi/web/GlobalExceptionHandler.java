@@ -11,6 +11,8 @@ import com.jxxerick.customerapi.domain.exception.DomainValidationException;
 import com.jxxerick.customerapi.domain.exception.EmailAlreadyInUseException;
 import com.jxxerick.customerapi.domain.exception.IdempotencyKeyReusedException;
 import com.jxxerick.customerapi.domain.exception.ImportTooLargeException;
+import com.jxxerick.customerapi.domain.exception.SegmentNameInUseException;
+import com.jxxerick.customerapi.domain.exception.SegmentNotFoundException;
 import com.jxxerick.customerapi.domain.exception.TrashedCustomerNotFoundException;
 import com.jxxerick.customerapi.web.csv.InvalidCsvException;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,8 @@ public class GlobalExceptionHandler {
     private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_EXCEPTION = Map.ofEntries(
             Map.entry(CustomerNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(TrashedCustomerNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(SegmentNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(SegmentNameInUseException.class, HttpStatus.CONFLICT),
             Map.entry(ConcurrentUpdateException.class, HttpStatus.PRECONDITION_FAILED),
             Map.entry(EmailAlreadyInUseException.class, HttpStatus.CONFLICT),
             Map.entry(CpfAlreadyInUseException.class, HttpStatus.CONFLICT),
